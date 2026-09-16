@@ -1,10 +1,8 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { ValidationDemoModule } from '@/modules/validation-demo/validation-demo.module';
+import { ApiContractModule } from '@/contract';
 
 @Module({
-  imports: [],
-  controllers: [AppController],
-  providers: [AppService],
+  imports: [ApiContractModule.forRoot(), ValidationDemoModule],
 })
 export class AppModule {}

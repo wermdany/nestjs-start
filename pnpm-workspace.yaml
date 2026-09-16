@@ -1,0 +1,16 @@
+# pnpm 的构建脚本白名单（`pnpm approve-builds` 会往这里写）。
+#
+# ⚠️ 值**必须**是布尔 `true` / `false`：pnpm 的 `createAllowBuildFunction()`
+# 只对这两个值建规则，写别的（包括 `approve-builds` 留下的占位符
+# `set this to true or false`）会被**静默忽略**，然后以
+# `ERR_PNPM_IGNORED_BUILDS` 失败。
+#
+# `@scarf/scarf` 是 `@nestjs/swagger` 的传递依赖，postinstall 只做匿名统计上报，
+# 对功能没有任何影响 —— 显式拒绝（`false`）既关掉上报，也不再让 install 报错。
+allowBuilds:
+  '@scarf/scarf': false
+  '@swc/core': true
+
+# 删 node_modules 重新链接时不弹确认（本机 pnpm 有时拿不到 TTY，
+# 否则会以 ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY 中断）。
+confirmModulesPurge: false
