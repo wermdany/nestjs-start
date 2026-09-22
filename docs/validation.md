@@ -17,29 +17,42 @@ Middleware → Guards → Interceptors(前) → Pipes → Handler → Intercepto
 ## 1. 文件在哪
 
 ```
+packages/api-contract/src/index.ts            ★ 线上契约（纯类型）：ResponseBody / ErrorBody /
+                                                ErrorDetail / PaginationMeta / PaginatedResult / ErrorCode
+
 src/contract/                              契约层：对外只有 index.ts 一个入口
 ├── index.ts                               ★ 门面桶：只导出外部要用的东西
-├── api-contract.module.ts                 ApiContractModule.forRoot() → APP_PIPE / APP_FILTER / APP_INTERCEPTOR
+├── api-contract.module.ts                 forRoot / forRootAsync / API_CONTRACT_OPTIONS + 请求 id 中间件
 ├── validation/
 │   ├── validation-pipe.factory.ts         DEFAULT_VALIDATION_PIPE_OPTIONS / resolveValidationPipeOptions() / createValidationPipe()
-│   ├── validation-exception.factory.ts    校验失败 → { message, errors: [{field, message}] }
-│   ├── http-exception.filter.ts           AppExceptionFilter：失败响应统一形状
-│   ├── error-contract.ts                  ApiErrorBody / ErrorDetail 类型
+│   ├── contract-validation.pipe.ts        ContractValidationPipe：给每条明细补 errors[].location
+│   ├── validation-exception.factory.ts    校验失败 → { code, message, errors: [{field, message, code}] }
+│   ├── http-exception.filter.ts           AppExceptionFilter：失败响应统一形状（含数组型 message 规范化）
+│   ├── error-contract.ts                  失败侧类型的本地别名（形状在共享包里）
+│   ├── error-code.ts                      ErrorCode 值对象 + 约束名 → 语义 code 映射
+│   ├── error-location.ts                  location 的运行时校验（跨信任边界）
+│   ├── api-exception.ts                   业务异常基类：code + message + status
+│   ├── is-optional-not-null.decorator.ts  @IsOptionalNotNull()
 │   ├── raw-body.decorator.ts              @RawBody()（参数级豁免，走 createParamDecorator）
 │   └── is-not-reserved-name.validator.ts  IsNotReservedNameConstraint 类 + @IsNotReservedName()
+├── observability/
+│   ├── request-context.ts                 AsyncLocalStorage：runWithRequestContext / getRequestId
+│   └── request-id.middleware.ts           RequestIdMiddleware：x-request-id 生成/沿用 + 幂等
 ├── response/
-│   ├── response-contract.ts               契约类型 + PAGINATED_RESULT 标记
-│   ├── response-envelope.interceptor.ts   成功响应统一形状
+│   ├── response-contract.ts               ENVELOPED / PAGINATED_RESULT 两个标记 + 契约类型转出
+│   ├── response-envelope.interceptor.ts   成功响应统一形状（可关、幂等）
+│   ├── is-enveloped.ts                    「已经包过信封」守卫（幂等的基础）
 │   ├── is-paginated-result.ts             分页结果守卫（只认非枚举 symbol）
 │   └── no-envelope.decorator.ts           @NoEnvelope()
 └── pagination/                            跨 feature 复用的共享分页
     ├── pagination-query.dto.ts            PaginationQueryDto + createPaginationQueryDto()
-    └── paginated-result.ts                PaginatedResult<T> + buildPaginatedResult()
+    └── paginated-result.ts                buildPaginatedResult()
 
 src/swagger/                               OpenAPI 投影（契约层保持零 Swagger 依赖，见 §9.7）
-├── setup-swagger.ts                       setupSwagger(app)：/docs（UI）+ /docs-json
+├── setup-swagger.ts                       buildDocument(app)（唯一构建入口）+ setupSwagger(app)：/docs + /docs-json
+├── export-openapi.ts                      pnpm openapi:export → openapi/openapi.json
 ├── is-swagger-enabled.ts                  启停规则（纯函数）
-├── envelope.schema.ts                     信封 / errors[] 的 schema（唯一手写处）
+├── envelope.schema.ts                     信封 / errors[] 的 schema（唯一手写处 + e2e 双向守卫）
 └── api-errors.decorator.ts                @ApiEnvelopeErrors() / @ApiEnvelopeConflict()
 
 src/modules/validation-demo/               内存版 users 资源，无数据库 —— 活文档
@@ -48,7 +61,7 @@ src/modules/validation-demo/               内存版 users 资源，无数据库
 ├── validation-pipe-order.controller.ts    全局 + 局部两级管道的对照
 ├── validation-demo.service.ts
 ├── user.dto.ts                            响应模型 UserDto（= 原来的 User interface）
-├── exceptions.ts                          具名业务异常（文案集中一处）
+├── exceptions.ts                          具名业务异常（继承 ApiException）
 ├── dto/                                   user-role / address / create-user / update-user / query-users / user-id-param / webhook / plain-webhook / webhook-response
 └── __tests__/                             validation-demo.e2e-spec.ts（契约）+ swagger.e2e-spec.ts（文档）
 ```
@@ -57,7 +70,10 @@ src/modules/validation-demo/               内存版 users 资源，无数据库
 
 - **`src/contract/` 内部互相引用走具体文件**（`api-contract.module.ts` 里写 `./validation/validation-pipe.factory`），**绝不走桶** —— 这样桶永远不参与循环依赖。
 - 消费方走门面：`import { ApiContractModule, RawBody } from '@/contract'`。
-- **模块内不再下沉 spec**：整个仓库只有 `__tests__/validation-demo.e2e-spec.ts` 一个测试文件，它只干一件事 —— 把响应契约的形状钉死。
+- **模块内不再下沉 spec**：整个仓库有三个测试文件 ——
+  `validation-demo.e2e-spec.ts` 钉响应契约的形状（键集 / 状态码 / code / location / traceId），
+  `swagger.e2e-spec.ts` 钉 OpenAPI 文档（路由覆盖、信封 schema、插件推导、与运行时错误明细的一致性），
+  `src/config/__tests__/config.e2e-spec.ts` 钉环境变量契约（校验规则、默认值、脱敏）。
 
 `main.ts` 里**没有** `app.useGlobalPipes(...)` / `app.useGlobalFilters(...)` / `app.useGlobalInterceptors(...)`。
 
@@ -72,6 +88,12 @@ src/modules/validation-demo/               内存版 users 资源，无数据库
 | `whitelist` | 剥掉 DTO 上没有校验装饰器的字段 |
 | `forbidNonWhitelisted` | **当前是 `false`**：未声明字段被 `whitelist` 静默剥掉。设成 `true` 会改成"直接 400" |
 | `transform` | 把 plain object 变成 DTO 实例，`@Type()` 与默认值才会生效 |
+| `exceptionFactory` | 输出 `{ code: 'VALIDATION_FAILED', message, errors: [{ field, message, code }] }` |
+
+管道的**类**是 `ContractValidationPipe`（`ValidationPipe` 的子类），它只多做一件事：
+给每条明细补 `errors[].location`（`body` / `query` / `param`）—— 见 §9.8。
+`createValidationPipe()` 返回的就是它，所以参数级 `@UsePipes(createValidationPipe(...))`
+拿到的也是同一套行为。
 
 > ⚠️ **这两个开关必须成对理解**：`forbidNonWhitelisted` 只是 `whitelist()` **内部的一个分支**
 > （`class-validator` 的 `ValidationExecutor` 里 `if (whitelist) this.whitelist(...)`）。
@@ -488,13 +510,20 @@ CycleB.ref = [class CycleA] { tag: 'A', ref: undefined }
 // 成功 · handler 没 return（HTTP 201）
 { "success": true, "data": null }
 
-// 失败 · 校验（HTTP 400）：带字段级明细
+// 失败 · 校验（HTTP 400）：带 code / traceId / 字段级明细
 { "success": false, "error": "Bad Request", "message": "Request validation failed",
-  "errors": [ { "field": "address.city", "message": "city must be longer than or equal to 2 characters" } ] }
+  "code": "VALIDATION_FAILED", "traceId": "3f1c9a4e-…",
+  "errors": [ { "field": "address.city", "location": "body", "code": "INVALID_LENGTH",
+                "message": "city must be longer than or equal to 2 characters" } ] }
 
-// 失败 · 业务（HTTP 404 / 409）：没有 errors 就没有那个键
-{ "success": false, "error": "Not Found", "message": "user 999999 not found" }
-{ "success": false, "error": "Conflict", "message": "email neo@example.com already exists" }
+// 失败 · 业务（HTTP 404 / 409）：没有 errors 就没有那个键，但 code 有
+{ "success": false, "error": "Not Found", "message": "user 999999 not found",
+  "code": "USER_NOT_FOUND", "traceId": "3f1c9a4e-…" }
+{ "success": false, "error": "Conflict", "message": "email neo@example.com already exists",
+  "code": "EMAIL_ALREADY_EXISTS", "traceId": "3f1c9a4e-…" }
+
+// 失败 · 框架（未匹配路由的 404）：没有业务 code
+{ "success": false, "error": "Not Found", "message": "Cannot GET /nope", "traceId": "3f1c9a4e-…" }
 ```
 
 | 字段 | 恒有？ | 谁产出 | 给谁用 |
@@ -503,8 +532,10 @@ CycleB.ref = [class CycleA] { tag: 'A', ref: undefined }
 | `data` | **仅成功** | interceptor | 业务数据；分页时是这一页的数组 |
 | `meta` | 仅成功且仅有元数据时 | interceptor | 分页元信息：`totalItems` / `itemsPerPage` / `currentPage` |
 | `error` | **仅失败** | filter | HTTP 状态短语 |
+| `code` | 仅失败且**有语义**时 | filter（业务异常 / 校验） | **机器判据**（见 §9.8） |
+| `traceId` | 仅失败（真实请求里恒有） | filter（读请求 id） | 把响应和日志对上（见 §9.8） |
 | `message` | **仅失败** | filter | 人类可读说明（校验失败时是固定概述） |
-| `errors[]` | 仅失败且仅有明细时 | filter（校验类） | `field` 映射到表单字段，`message` 给终端用户 |
+| `errors[]` | 仅失败且仅有明细时 | filter（校验类 / 内建管道） | `field` 映射到表单字段，`location` 说明来源，`code` 给机器，`message` 给终端用户 |
 
 **`data` 与 `error` 互斥**：handler 抛异常时成功信封根本不参与（异常直接冒泡到 filter），
 所以客户端永远不需要处理"既带 data 又带 error"的响应 —— 而 `success` 就是这件事的显式化。
@@ -517,9 +548,12 @@ CycleB.ref = [class CycleA] { tag: 'A', ref: undefined }
 推荐类型（前端只需要一个，`success` 是字面量类型 ⇒ 自动收窄）：
 
 ```ts
-type ResponseBody<T> = SuccessBody<T> | ErrorBody;
+// 定义在 packages/api-contract，前后端同一份
+import type { ResponseBody } from '@nest-start/api-contract';
+
+type Body = ResponseBody<User>;
 // body.success === true  → body.data 可用
-// body.success === false → body.error / body.message / body.errors 可用
+// body.success === false → body.error / body.code / body.traceId / body.message / body.errors 可用
 ```
 
 前端一个分支收口：
@@ -527,7 +561,10 @@ type ResponseBody<T> = SuccessBody<T> | ErrorBody;
 ```ts
 if (!body.success) {
   toast(body.message);
-  mapFieldsToForm(body.errors);
+  switch (body.code) {                  // 机器判据，不要正则匹配 message
+    case 'EMAIL_ALREADY_EXISTS': markField('email', body.message); break;
+    default: mapFieldsToForm(body.errors);
+  }
   return;
 }
 use(body.data);
@@ -555,19 +592,67 @@ use(body.data);
 
 | 侧 | 实现 | 挂载 |
 | --- | --- | --- |
-| 成功 | `ResponseEnvelopeInterceptor` | `APP_INTERCEPTOR`（`ApiContractModule.forRoot()`） |
-| 失败 | `AppExceptionFilter`（`@Catch()`） | `APP_FILTER`（同一个 `forRoot()`） |
+| 成功 | `ResponseEnvelopeInterceptor` | `APP_INTERCEPTOR`（`ApiContractModule.forRoot()` / `forRootAsync()`） |
+| 失败 | `AppExceptionFilter`（`@Catch()`） | `APP_FILTER`（同一个模块） |
+| 请求 id | `RequestIdMiddleware` | 模块的 `configure()`：`forRoutes('/{*splat}')` |
 
 `APP_*` 是 Nest 用来「全局挂增强器」的 token：`scanner` 会把整张模块图里这些 token 的 provider
 **实例**收进 `ApplicationConfig`。所以 `imports: [ApiContractModule.forRoot()]` 一行就够，
 `main.ts` 保持干净。
 
-**异常过滤器把细节挡在里面**（RFC 9457 §5 / OWASP）：非 `HttpException` 一律回
-`{ success: false, error: 'Internal Server Error', message: 'Internal server error' }`（HTTP 500），
-堆栈、SQL、类名只进日志 —— 不通过 HTTP 泄漏实现细节。
+三个实现上有讲究的地方：
 
-**业务异常的文案集中在 `src/modules/validation-demo/exceptions.ts`。** 做成具名类是为了抛出点自解释、
-文案集中一处，以后要给某个错误单独加行为（附加字段、不同状态码、或引入错误码）有地方可加。
+1. **选项走 `API_CONTRACT_OPTIONS` 这个 DI token**（不再在 `forRoot()` 里 `useValue` 死）。
+   于是一份改动同时解决两件事：`forRootAsync()` 能实现（选项可以来自 `ConfigService`），
+   测试里能 `overrideProvider(API_CONTRACT_OPTIONS)` 换配置。
+   代价是 `envelope` 开关必须挪进拦截器**运行时**判断（静态 provider 列表没法按异步工厂的结果增删）。
+2. **信封幂等**：每个 `APP_INTERCEPTOR` 实例都会跑一遍 `map()`，而 `ApiContractModule`
+   可能被 import 多次（某个 `SharedModule` 顺手又 import 一次）—— 实测会套出
+   `{"success":true,"data":{"success":true,"data":{…}}}`。所以拦截器给产物打一个**非枚举**
+   `ENVELOPED` symbol，已经包过就原样放行。`APP_FILTER` 侧无此问题（`ExceptionsHandler`
+   命中第一个匹配的过滤器就返回）。
+3. **请求 id 中间件也是幂等的**（请求对象上已有 id 就跳过），并且**不能用 `forRoutes('*')`**：
+   Nest 11 底层是 Express 5，path-to-regexp v8 要求通配符必须命名，`'*'` / `'/*'` / `'(.*)'`
+   会直接抛 `TypeError: Missing parameter name`；`'/{*splat}'` 才是 v8 的写法（`{}` 表示可选，
+   根路径也覆盖）。
+
+**异常过滤器把细节挡在里面**（RFC 9457 §5 / OWASP）：非 `HttpException` 一律回
+`{ success: false, error: 'Internal Server Error', message: 'Internal server error',
+code: 'INTERNAL_ERROR', traceId }`（HTTP 500），
+堆栈、SQL、类名只进日志 —— 不通过 HTTP 泄漏实现细节。`traceId` 是日志与响应之间唯一那根线。
+
+**业务异常集中 `src/modules/validation-demo/exceptions.ts`**，都继承契约层的 `ApiException`
+（`code` + 文案 + 状态码三件事绑在一处）：
+
+```ts
+export class EmailAlreadyExistsException extends ApiException {
+  constructor(email: string) {
+    super(ErrorCode.EMAIL_ALREADY_EXISTS, `email ${email} already exists`, HttpStatus.CONFLICT);
+  }
+}
+```
+
+### 9.3.1 过滤器还要管"别人抛的异常"
+
+Nest 内建 / 第三方管道与守卫抛异常的**传统载荷**是 `{ statusCode, message: string[], error }`
+（`ParseFilePipe`、任何人局部挂的 `new ValidationPipe()`、第三方模块…）。如果只认
+`typeof message === 'string'`，这些异常的 `message` 会退化成状态短语、明细**全丢**：
+
+```http
+GET /validation-demo/pipe-order/array-message       # throw new BadRequestException([...])
+# 修复前：{"success":false,"error":"Bad Request","message":"Bad Request"}
+# 现在：  {"success":false,"error":"Bad Request","message":"title must be a string",
+#          "errors":[{"field":"(request)","message":"title must be a string"},
+#                    {"field":"(request)","message":"title too long"}]}
+```
+
+规则：**出口只有一个形状**。数组型 `message` 逐条转成 `errors[]`（它们不带字段名，
+所以 `field` 是 `'(request)'`，硬编一个字段名比写 `'(request)'` 更误导），
+`message` 兜底成第一条明细。没有这一层，契约只在"自己写的管道"上成立。
+
+另外两个小口子也在这一个函数里收掉：空字符串 `message`（`new NotFoundException('')`）
+fallback 到状态短语；`response.headersSent` 为真时（`@Sse()` 已建流后抛错）直接记日志返回，
+否则 `status().json()` 会抛 `ERR_HTTP_HEADERS_SENT` —— 过滤器自己变成未处理异常。
 
 ### 9.4 边界：什么时候不套信封
 
@@ -616,21 +701,23 @@ legacy() { return { old: 'shape' }; }   // HTTP 200 {"old":"shape"} —— 没�
 
 ### 9.6 有意没做
 
-- **机器可读的错误码（`code`）** —— 这是**当前最明显的缺口**。`success` 只能回答"成了没有"，
-  但回答不了"失败的具体原因"：前端区分"邮箱重复"和"其它冲突"现在只能靠 `message` 文案
-  （数字状态码已经在 HTTP 层，不再进 body）。而 AIP-193 明确警告：一旦客户端开始 parse message，
-  **文案就变成事实上的契约、以后不能改**。所以如果要加，越早加越便宜。
-  加的时候可能要注意：class-validator 的约束名（`isInt` / `min`）是**库的细节**，换到 Zod 就全变了，
-  想要 code 扛住换库得自己定义一套枚举做映射。
-- **`traceId` / `instance`**：线上排障还需要一个把响应和日志对上的 id（RFC 9457 的 `instance`、
-  自建 `x-request-id` + AsyncLocalStorage）。现在 500 只能靠时间对齐日志。
 - **`application/problem+json` 媒体类型**：只在对外公开 API 时才值得；内部 SPA 用自定义信封更省事。
 - **成功响应的提示文案**：本仓库刻意不下发（见 §9.1）；如果哪天真需要，也应该像 `code` 一样
   走**稳定的语义标识**，而不是把一段给人看的文案当契约。
 - **`message` 的 i18n**：现在是硬编码英文，且校验类 `message` 由 class-validator 的模板产出。
-  真要做多语言，得在 `exceptionFactory` 里把 `constraints` 的 key 映射成自己的文案表（而不是 parse 文案）。
+  真要做多语言，得在 `exceptionFactory` 里把 `constraints` 的 key 映射成自己的文案表（而不是 parse 文案）
+  —— 好消息是有了 `errors[].code` 之后，前端可以先按 code 出文案，
+  不依赖服务端文案也能工作。
 - **`error`（HTTP 状态短语）**：它是失败侧唯一还带状态色彩的字段，虽然可由状态码推导，
-  但目前作为"无需查表的人话标识"保留；若将来引入 `code`，它是第一个可以删的字段。
+  但目前作为"无需查表的人话标识"保留；`code` 落地之后，它是第一个可以删的字段。
+- **成功侧的 `traceId`**：现在只有失败响应带 `traceId`（成功响应只在 `x-request-id` 响应头里）。
+  要不要进 body 取决于前端排障时会不会拿着成功响应的 id 去查日志 —— 头部其实已经够了。
+
+已经做掉的（曾经列在这里）：
+
+- **机器可读的错误码（`code`）** —— 见 §9.8。语义化的枚举 + 约束名映射表，
+  并且编译期断言保证 `ErrorCode` 值对象覆盖共享联合类型的每个成员。
+- **`traceId`** —— 见 §9.8。请求 id 中间件 + `AsyncLocalStorage`，同时进响应头、错误体和日志。
 
 ### 9.7 OpenAPI 投影（`/docs`）
 
@@ -639,11 +726,16 @@ legacy() { return { old: 'shape' }; }   // HTTP 200 {"old":"shape"} —— 没�
 
 | 文件 | 职责 |
 | --- | --- |
-| `setup-swagger.ts` | `setupSwagger(app)`：`DocumentBuilder` + `SwaggerModule.setup('docs', ...)`；注册响应模型与注入信封组件 |
+| `setup-swagger.ts` | `buildDocument(app)`（**唯一构建入口**：`DocumentBuilder` + `extraModels` + 注入信封组件）与 `setupSwagger(app)`（`SwaggerModule.setup('docs', …)`） |
+| `export-openapi.ts` | `pnpm openapi:export`：用同一个 `buildDocument()` 写出 `openapi/openapi.json` |
 | `is-swagger-enabled.ts` | 启停规则纯函数 |
-| `envelope.schema.ts` | 信封与 `errors[]` 的 schema 定义 + 失败示例（**唯一手写处**，改契约要同步这里） |
+| `envelope.schema.ts` | 信封与 `errors[]` 的 schema 定义 + 失败示例（**唯一手写处**；结构由 e2e 的**双向守卫**与运行时对齐，枚举取值来自契约层） |
 | `api-envelope.decorator.ts` | `@ApiOkEnvelope(dto, '…')` / `@ApiCreatedEnvelope(dto, '…')` —— 成功响应一行 |
 | `api-errors.decorator.ts` | `@ApiEnvelopeErrors()`（类级挂 400/404/500）、`@ApiEnvelopeConflict()`（方法级挂 409） |
+
+**双向守卫**（`swagger.e2e-spec.ts`）：拿一条真实的校验失败响应，逐条比对
+`ERROR_DETAIL_SCHEMA.properties` —— 运行时多出 schema 没声明的键、或 schema 的 `required`
+在运行时缺席，都会红。这是"契约层不能依赖 Swagger、结构只能手写"的等价安全网。
 
 ### 控制器里只留业务语义
 
@@ -706,7 +798,81 @@ create(@Body() dto: CreateUserDto) { return this.users.create(dto); }
   `UserRole` 而退化成 `{ type: 'object' }`。Schema 是对外契约，不能依赖"某个构建路径恰好能推出来"。
 - **分页参数**：`PaginationQueryDto` 被所有列表接口复用，显式写死 schema 更不容易整体漂移；
   `sortBy` 的枚举还只有调用方（`createPaginationQueryDto([...])`）知道，而那个类是函数体内动态生成的。
-- **信封**：见本节开头，契约层不引入 Swagger。
+- **信封**：契约层零 Swagger 依赖（`ErrorDetail` 现在是**纯类型**，定义在共享契约包里），
+  所以信封结构只能在 `envelope.schema.ts` 手写；`code` / `location` 的**取值集合**仍从契约层取
+  （`Object.values(ErrorCode)` / `ERROR_LOCATIONS`），结构则由 §9.7 开头那条**双向守卫**钉住。
+
+**单一构建入口**：`buildDocument(app)` 是唯一一处 `DocumentBuilder` / `extraModels` / 信封组件注入。
+`setupSwagger()` 和 `swagger.e2e-spec.ts` 都调它 —— 以前测试里自己又拼了一份，
+于是入口改了 title 或 `extraModels` 而测试照样全绿（那种测试等于没测）。
+
+**落盘产物**：`pnpm openapi:export` 用同一个 `buildDocument()` 写出 `openapi/openapi.json`，
+给前端生成类型（`openapi-typescript` / `orval`）以及在 CI 里做破坏性变更检测（`oasdiff`）。
+
+### 9.8 错误码 / 位置 / 请求 id
+
+这三件事解决的是同一个问题：**让机器和排障的人都能不依赖文案地拿到信息**。
+
+#### `code`：语义化，不是约束名
+
+| 层 | 取值 | 例子 |
+| --- | --- | --- |
+| 顶层 `code` | 业务语义 | `VALIDATION_FAILED` / `EMAIL_ALREADY_EXISTS` / `USER_NOT_FOUND` / `INTERNAL_ERROR` |
+| 字段级 `errors[].code` | **校验语义** | `REQUIRED` / `INVALID_TYPE` / `INVALID_FORMAT` / `INVALID_LENGTH` / `OUT_OF_RANGE` / `NOT_ALLOWED_VALUE` / `RESERVED_NAME` / `TOO_MANY_ITEMS` / `UNKNOWN_FIELD` / `UNKNOWN_CONSTRAINT` |
+
+字段级 code 刻意**不用** class-validator 的约束名（`isInt` / `min` / `matches`）：
+那是库的实现细节，换到 Zod 就全变了。中间隔一张 `VALIDATION_CONSTRAINT_CODES` 映射表，
+对外只承诺语义 —— 换库只改表。
+
+来源三处：
+
+- 校验失败 → `createValidationExceptionFactory()` 直接给 `VALIDATION_FAILED` + 每条明细的字段级 code；
+- 业务异常 → `class XxxException extends ApiException`（`code` + 文案 + 状态码绑一处）；
+- 框架自己抛的异常 → **没有** code（硬塞一个由状态码推导出来的 code 会把
+  "状态码只在状态行"这条设计又破坏掉）。
+
+**`code` 不能改名**（改名等于破坏性变更），`message` 随便改。`ErrorCode` 的**类型**在
+`packages/api-contract`（前后端共享），**值对象**在 `src/contract/validation/error-code.ts`，
+两者之间有一句编译期断言：共享联合类型加了成员而值对象没跟上 —— 构建直接红。
+
+#### `location`：同名不同源能分清
+
+`field: "id"` 到底是 body 的 `id` 还是 path param 的 `id`？JSON:API 用
+`source.pointer` / `source.parameter` 分开表达，我们也分开：
+
+```
+GET  /validation-demo/users/abc   → { field: "id", location: "param", code: "INVALID_TYPE" }
+POST /validation-demo/users {id:…}→ { field: "id", location: "body",  code: "INVALID_TYPE" }
+GET  /validation-demo/users?page=abc → { field: "page", location: "query" }
+```
+
+为什么必须**继承 `ValidationPipe`**（`ContractValidationPipe`）而不是改 `exceptionFactory`：
+`exceptionFactory(errors)` 的入参只有 `ValidationError[]`，`ArgumentMetadata` 在
+`transform()` 的局部作用域里 —— 工厂拿不到。`transform()` 手里同时有 `metadata.type`
+和"校验失败会抛什么"，所以在那里做一次浅包装：只给 `errors[]` 加 `location`，
+不改校验逻辑、不改状态码、不改文案；不是本仓库那种对象载荷的异常原样放行（交给过滤器规范化）。
+
+#### `traceId`：响应、响应头、日志三点对齐
+
+`RequestIdMiddleware` 每个请求做三件事：写 `AsyncLocalStorage`、回写 `x-request-id` 响应头、
+失败时由过滤器读进 `traceId`。于是：
+
+```bash
+$ curl -si localhost:3000/validation-demo/users/999999 | grep -i -e x-request-id -e traceId
+x-request-id: 97f26779-3a1c-4b39-bce4-9342397f9fe0
+{"success":false,…,"traceId":"97f26779-3a1c-4b39-bce4-9342397f9fe0"}
+# 日志里同一行：Unhandled exception on GET /… [97f26779-…]
+```
+
+客户端带 `x-request-id` 时**沿用**（跨服务链路才连得上），但只接受
+`^[A-Za-z0-9._-]{8,128}$` 的值，不合法的换成服务端 UUID ——
+响应头和日志里不该出现客户端可控的任意内容。
+
+两个边界：
+
+- **body 解析失败时没有 traceId**：中间件跑在 body-parser 之后，畸形 JSON 的 400
+  走的是解析器的错误通道。所以 `traceId` 在 OpenAPI schema 里**不是** required 字段。
+- 成功响应只有 `x-request-id` 响应头，没有 body 字段 —— 成功响应 shape 保持"只有 data/meta"。
 
 ### 依据
 
@@ -719,3 +885,62 @@ create(@Body() dto: CreateUserDto) { return this.users.create(dto); }
 | [JSON:API errors](https://jsonapi.org/format/#error-objects) | 字段定位用 `source: { pointer \| parameter }`；`data` 与 `errors` 不同时出现 |
 | [nestjs-paginate](https://github.com/ppetzold/nestjs-paginate) | `meta` 字段命名与 `sortableColumns` 必填 |
 | [OWASP](https://owasp.org/www-project-web-security-testing-guide/) | 错误响应不暴露堆栈 |
+
+---
+
+## 10. 三个会破坏契约的边界（都实测过）
+
+契约测试最容易漏的不是"正常路径"，而是下面这三类**形状没变、语义已经错了**的情况。
+每一次发现的过程与复现命令记在 [`docs/review-backlog.md`](review-backlog.md) §1。
+
+### 10.1 `@IsOptional()` 会放行 `null`
+
+class-validator 的官方语义是"值为 `null` **或** `undefined` 时跳过该属性上的**所有**校验"，
+不是"字段可以不存在"。于是：
+
+```http
+PATCH /validation-demo/users/1  {"tags": null}
+# 修复前：200，响应里 `tags: null` —— 而 UserDto.tags 是 string[]、OpenAPI 里是 required 的 array
+# 现在：  400，errors: [{ field: "tags", location: "body", code: "INVALID_TYPE" }]
+```
+
+**运行时响应违反了自己发布的 schema**，而按"键集"断言的契约测试照不到它（键没变，值错了）。
+
+两条规矩：
+
+- 想表达"可以不传、但传了不能是 `null`" → `@IsOptionalNotNull()`（`ValidateIf(value !== undefined)`）；
+- `PartialType` 派生的 Update DTO 必须显式 `PartialType(CreateUserDto, { skipNullProperties: false })`
+  —— 这个选项的语义是**反着的**（`false` = 不跳过 null = null 也要过校验），默认值会再挂一遍
+  `@IsOptional()`，把漏洞放回来；
+- 如果某个字段的业务语义**就是**"传 null = 清空"，那就别用它：把类型写成 `T | null`、
+  Swagger 标 `nullable: true`，并在 service 里显式处理。两种语义混用才是真正的坑。
+
+### 10.2 归一化必须在校验/入库**之前**
+
+```http
+POST /validation-demo/users  {"email": "NEO@EXAMPLE.COM"}   # seed 里已有 neo@example.com
+# 修复前：201 —— "全局唯一"被大小写绕过
+# 现在：  409 EMAIL_ALREADY_EXISTS（比较前已 trim + toLowerCase）
+
+POST /validation-demo/users  {"name": "  Neo  "}
+# 修复前：原样入库（@Length 量的是含空格的原始串）
+# 现在：  "Neo"
+```
+
+放在 DTO 的 `@Transform` 上（class-transformer 先于 class-validator 执行），
+**不要**做成全局管道行为：webhook 的 `@RawBody()` 载荷、将来做签名校验的原始 body 都不能被改写。
+
+### 10.3 全局增强器必须能重复注册
+
+```json
+// 某个 SharedModule 顺手又 imports: [ApiContractModule.forRoot()] 时的实测结果
+{"success":true,"data":{"success":true,"data":{"ok":true,"dto":{"a":1}}}}
+```
+
+`APP_INTERCEPTOR` 会被 Nest 串成一条链，每个实例都跑一遍 `map()`。只把"只 import 一次"
+写进文档是约束不住下一层模块作者的，所以让增强器**幂等**（`ENVELOPED` 非枚举标记）；
+请求 id 中间件同理（请求对象上已有 id 就跳过）。`APP_FILTER` 不受影响
+（`ExceptionsHandler` 命中第一个匹配的过滤器就返回）。
+
+顺带一条**别踩**的坑：`forRoutes('*')` 在 Nest 11（Express 5 / path-to-regexp v8）下
+直接抛 `TypeError: Missing parameter name`，要用 `'/{*splat}'`。

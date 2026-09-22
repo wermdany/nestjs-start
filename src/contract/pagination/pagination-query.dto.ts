@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, Min } from 'class-validator';
+import { IsIn, IsInt, Min } from 'class-validator';
+import { IsOptionalNotNull } from '../validation/is-optional-not-null.decorator';
 
 /** 不传 `limit` 时的默认页大小。 */
 export const PAGE_SIZE_DEFAULT = 10;
@@ -71,7 +72,7 @@ export class PaginationQueryDto {
  * @example
  * ```ts
  * export class QueryUsersDto extends createPaginationQueryDto(['id', 'name']) {
- *   @IsOptional() @IsString() keyword?: string;
+ *   @IsOptionalNotNull() @IsString() keyword?: string;
  * }
  * ```
  */
@@ -85,7 +86,7 @@ export function createPaginationQueryDto<const T extends readonly string[]>(
       enum: [...sortableColumns],
       example: sortableColumns[0],
     })
-    @IsOptional()
+    @IsOptionalNotNull()
     @IsIn([...sortableColumns])
     sortBy?: T[number];
   }

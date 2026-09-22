@@ -15,10 +15,23 @@
     "outDir": "./dist",
     "baseUrl": "./",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@nest-start/api-contract": ["packages/api-contract/dist/index.d.ts"]
     },
     "incremental": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true
-  }
+  },
+  /**
+   * `packages/**` 是**独立的 project**（有自己的 `packages/api-contract/tsconfig.json`）。
+   *
+   * 必须在这里排除，否则 `include` 的默认值会把契约包的源码拉进服务端的 program，
+   * tsc 推断出的 `rootDir` 会从 `src` 变成仓库根 —— 产物从 `dist/main.js`
+   * 变成 `dist/src/main.js`，`pnpm start:prod` 直接失效（实测踩过）。
+   *
+   * 服务端只通过上面 `paths` 指向的 **`.d.ts`** 消费它：声明文件不参与 emit，
+   * 所以既不影响 `rootDir`，也不需要运行时能解析到这个包
+   * （包本身零运行时导出，import 会被完全擦除，见 `packages/api-contract/src/index.ts`）。
+   */
+  "exclude": ["node_modules", "dist", "packages"]
 }

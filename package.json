@@ -5,8 +5,11 @@
   "description": "Nest TypeScript starter repository",
   "license": "MIT",
   "scripts": {
-    "build": "nest build",
-    "format": "prettier --write \"src/**/*.ts\"",
+    "build": "pnpm build:contract && nest build",
+    "build:contract": "tsc -p packages/api-contract/tsconfig.json",
+    "prepare": "pnpm build:contract",
+    "openapi:export": "pnpm build && node dist/swagger/export-openapi.js",
+    "format": "prettier --write \"src/**/*.ts\" \"packages/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
@@ -21,12 +24,14 @@
   },
   "dependencies": {
     "@nestjs/common": "^11.0.17",
+    "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",
     "@nestjs/mapped-types": "^2.1.1",
     "@nestjs/platform-express": "^11.1.11",
     "@nestjs/swagger": "^11.4.7",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "helmet": "^8.3.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },

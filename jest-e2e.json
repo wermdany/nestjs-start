@@ -2,7 +2,8 @@
   "moduleFileExtensions": ["js", "json", "ts"],
   "rootDir": "src",
   "moduleNameMapper": {
-    "^@/(.*)$": "<rootDir>/$1"
+    "^@/(.*)$": "<rootDir>/$1",
+    "^@nest-start/api-contract$": "<rootDir>/../packages/api-contract/dist/index.js"
   },
   "testEnvironment": "node",
   "testRegex": "\\.e2e-spec\\.ts$",

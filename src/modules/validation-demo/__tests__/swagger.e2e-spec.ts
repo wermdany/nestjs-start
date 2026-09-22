@@ -1,20 +1,24 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { OpenAPIObject } from '@nestjs/swagger';
+import request from 'supertest';
+import { App } from 'supertest/types';
 import { AppModule } from '@/app.module';
+import { ErrorCode } from '@/contract';
 import {
   ENVELOPE_COMPONENT_SCHEMAS,
   ERROR_DETAIL_REF,
+  ERROR_DETAIL_SCHEMA,
   ERROR_ENVELOPE_REF,
+  ERROR_ENVELOPE_SCHEMA,
   RESPONSE_ENVELOPE_REF,
 } from '@/swagger/envelope.schema';
 import { isSwaggerEnabled } from '@/swagger/is-swagger-enabled';
 import {
+  buildDocument,
   setupSwagger,
   SWAGGER_JSON_PATH,
   SWAGGER_UI_PATH,
-  RESPONSE_MODELS,
 } from '@/swagger/setup-swagger';
 
 /**
@@ -29,30 +33,28 @@ import {
  * 是因为 `jest-e2e.json` 里给 ts-jest 挂了 `@nestjs/swagger` 的 AST 变换
  * （见仓库根的 `jest-swagger-transformer.js`）—— 它保证测试里生成的 schema
  * 与 `pnpm build` 出来的一致。
+ *
+ * ⚠️ 文档**不在这里重新拼**：用的是 `src/swagger/setup-swagger.ts` 导出的
+ * `buildDocument()` —— 线上入口和测试入口是同一个函数。
+ * （以前这里自己写了一遍 `DocumentBuilder`，于是入口改了 title / `extraModels`
+ * 而测试照样全绿 —— 那种测试等于没测。)
  */
 
 const ENVELOPE_COMPONENTS: Record<string, object> = {
   ...ENVELOPE_COMPONENT_SCHEMAS,
 };
 
-/** 与 `setupSwagger()` 里完全相同的文档配置（那边是运行时入口，这里是断言入口）。 */
-function buildDocument(app: INestApplication): OpenAPIObject {
-  const config = new DocumentBuilder()
-    .setTitle('nestjs-start API')
-    .setVersion('1.0.0')
-    .addTag('validation-demo')
-    .build();
-
-  const document = SwaggerModule.createDocument(app, config, {
-    extraModels: RESPONSE_MODELS,
-  });
-  document.components.schemas = {
-    ...document.components.schemas,
-    ...ENVELOPE_COMPONENTS,
-  };
-
-  return document;
+/**
+ * 断言用的窄化视图：`SchemaObject.properties` 的值是 `SchemaObject | ReferenceObject`，
+ * 直接点 `.enum` 会被 TS 拦住，所以统一收窄一次。
+ */
+interface PropertiesView {
+  required?: string[];
+  properties?: Record<string, Record<string, unknown>>;
 }
+
+const ERROR_DETAIL_VIEW = ERROR_DETAIL_SCHEMA as PropertiesView;
+const ERROR_ENVELOPE_VIEW = ERROR_ENVELOPE_SCHEMA as PropertiesView;
 
 /**
  * 拿一个操作的响应 schema 里**由具体路由补的那部分**（`allOf[1].properties`）。
@@ -121,7 +123,7 @@ function collectRefs(node: unknown, found: Set<string>): void {
 }
 
 describe('OpenAPI 文档', () => {
-  let app: INestApplication;
+  let app: INestApplication<App>;
 
   beforeAll(async () => {
     const moduleFixture = await Test.createTestingModule({
@@ -137,11 +139,12 @@ describe('OpenAPI 文档', () => {
   });
 
   describe('路由覆盖', () => {
-    it('8 个路径 / 12 个操作都在文档里（含路径参数写法 {id}）', () => {
+    it('8 个路径 / 13 个操作都在文档里（含路径参数写法 {id}）', () => {
       const document = buildDocument(app);
 
       expect(Object.keys(document.paths).sort()).toEqual([
         '/validation-demo/no-content',
+        '/validation-demo/pipe-order/array-message',
         '/validation-demo/pipe-order/ids',
         '/validation-demo/pipe-order/strict',
         '/validation-demo/users',
@@ -303,6 +306,88 @@ describe('OpenAPI 文档', () => {
         'totalItems',
       ]);
     });
+
+    /**
+     * `code` / `traceId` 是契约层新增的两个字段，schema 必须跟上：
+     *
+     * - `code` 的**枚举取值**直接来自契约层的 `ErrorCode`（不是手抄的字符串数组）；
+     * - 两者都**不在** `required` 里：框架自身抛的错没有业务 code，
+     *   而请求 id 中间件跑在 body 解析之后 —— body 解析失败的 400 没有 traceId。
+     */
+    it('失败信封声明了 code / traceId，且取值集合来自契约层', () => {
+      const properties = ERROR_ENVELOPE_VIEW.properties ?? {};
+
+      expect(Object.keys(properties).sort()).toEqual([
+        'code',
+        'error',
+        'errors',
+        'message',
+        'success',
+        'traceId',
+      ]);
+      expect(ERROR_ENVELOPE_VIEW.required).toEqual([
+        'success',
+        'error',
+        'message',
+      ]);
+      expect(properties.code?.enum).toEqual(
+        expect.arrayContaining(Object.values(ErrorCode)),
+      );
+      expect(properties.traceId).toMatchObject({ type: 'string' });
+    });
+
+    it('错误明细声明了 location / code（枚举来自契约层）', () => {
+      const properties = ERROR_DETAIL_VIEW.properties ?? {};
+
+      expect(Object.keys(properties).sort()).toEqual([
+        'code',
+        'field',
+        'location',
+        'message',
+      ]);
+      expect(properties.location?.enum).toEqual(['body', 'query', 'param']);
+      expect(properties.code?.enum).toEqual(
+        expect.arrayContaining(Object.values(ErrorCode)),
+      );
+    });
+
+    /**
+     * **双向守卫**：手写的 `ERROR_DETAIL_SCHEMA` 与运行时真实的 `errors[]` 必须一致。
+     *
+     * 契约层的 `ErrorDetail` 是纯类型（定义在 `@nest-start/api-contract`），
+     * 契约层刻意零 Swagger 依赖，所以这边只能手写结构 —— 这条测试是"手写"的安全网：
+     *
+     * - 运行时多出一个 schema 没声明的键 ⇒ 文档在骗人；
+     * - schema 的 `required` 在运行时缺席 ⇒ 文档在骗人。
+     *
+     * 漏改一边都会红，这就是"单一数据源"在无法共享类型时的等价物。
+     */
+    it('手写的错误明细 schema 与运行时 errors[] 一致（双向守卫）', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/validation-demo/users')
+        .send({
+          name: 'x',
+          email: 'not-an-email',
+          role: 'viewer',
+          address: { street: 'M', city: 'X' },
+        })
+        .expect(400);
+
+      const details = (res.body as { errors?: Record<string, unknown>[] })
+        .errors;
+
+      expect(details?.length).toBeGreaterThan(0);
+
+      const properties = ERROR_DETAIL_VIEW.properties ?? {};
+      const required = ERROR_DETAIL_VIEW.required ?? [];
+
+      for (const detail of details ?? []) {
+        expect(
+          Object.keys(detail).filter((key) => !(key in properties)),
+        ).toEqual([]);
+        expect(required.filter((key) => !(key in detail))).toEqual([]);
+      }
+    });
   });
 
   describe('与校验规则同源（CLI 插件生效的证据）', () => {
@@ -341,16 +426,18 @@ describe('OpenAPI 文档', () => {
 
     it('分页参数是显式写的（含 sortBy 白名单枚举与 limit 上限）', () => {
       const document = buildDocument(app);
-      const parameters = (
-        document.paths['/validation-demo/users'].get as {
-          parameters: {
-            name: string;
-            schema: Record<string, unknown>;
-          }[];
-        }
-      ).parameters;
+      const operation = document.paths['/validation-demo/users']
+        .get as unknown as {
+        parameters: {
+          name: string;
+          schema: Record<string, unknown>;
+        }[];
+      };
       const byName = Object.fromEntries(
-        parameters.map((parameter) => [parameter.name, parameter.schema]),
+        operation.parameters.map((parameter) => [
+          parameter.name,
+          parameter.schema,
+        ]),
       );
 
       expect(byName.sortBy).toMatchObject({ enum: ['id', 'name', 'email'] });
@@ -401,7 +488,7 @@ describe('setupSwagger 的启停与可访问性', () => {
     const moduleFixture = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
-    const app = moduleFixture.createNestApplication();
+    const app: INestApplication<App> = moduleFixture.createNestApplication();
 
     // ⚠️ 顺序很重要：`setupSwagger()` 必须在 `listen()`/`init()` **之前**调用。
     // `NestApplication.init()` 会注册"未匹配路由 → 404 失败信封"的钩子，

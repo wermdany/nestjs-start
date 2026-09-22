@@ -11,20 +11,39 @@ import {
 } from '@nestjs/common/constants';
 import { map, type Observable } from 'rxjs';
 import type { ResponseBody, SuccessBody } from './response-contract';
+import { ENVELOPED } from './response-contract';
+import { isEnveloped } from './is-enveloped';
 import { isPaginatedResult } from './is-paginated-result';
 import { NO_ENVELOPE_METADATA } from './no-envelope.decorator';
+
+/** 拦截器的开关。用对象而不是布尔，方便以后加 `excludePaths` 之类的选项。 */
+export interface ResponseEnvelopeOptions {
+  /** 是否启用响应信封，默认 `true`（`ApiContractModule.forRoot({ envelope: false })` 会关掉）。 */
+  enabled?: boolean;
+}
 
 /**
  * 统一**成功**响应的形状：`{ success: true, data, meta? }`。
  *
  * 失败侧由 `AppExceptionFilter` 负责（见 `response-contract.ts` 的契约说明）：
- * 它产出 `{ success: false, error, message, errors? }`，并把**数字状态码写进 HTTP 状态行**。
- * 这个拦截器不碰状态码 —— body 里不再有 `statusCode`，前端要数字码就读 `res.status`。
+ * 它产出 `{ success: false, error, message, code?, traceId?, errors? }`，
+ * 并把**数字状态码写进 HTTP 状态行**。这个拦截器不碰状态码 ——
+ * body 里没有 `statusCode`，前端要数字码就读 `res.status`。
  *
  * ## 挂在哪一层
  *
- * 由 `ApiContractModule.forRoot()` 注册成 `APP_INTERCEPTOR`（与 `APP_PIPE` / `APP_FILTER`
- * 同样的做法），所以 `main.ts` 里**不需要** `app.useGlobalInterceptors(...)`。
+ * 由 `ApiContractModule.forRoot()` / `forRootAsync()` 注册成 `APP_INTERCEPTOR`
+ * （与 `APP_PIPE` / `APP_FILTER` 同样的做法），所以 `main.ts` 里**不需要**
+ * `app.useGlobalInterceptors(...)`。
+ *
+ * ## 两个"能安全重复注册"的设计
+ *
+ * 1. **开关在运行时判断**（构造函数注入 `enabled`）而不是"注册或不注册" ——
+ *    这是 `forRootAsync` 能成立的前提：异步工厂拿到的选项在静态 provider 列表里
+ *    是未知的，没法据此增删 provider；
+ * 2. **幂等**：返回值已经带 {@link ENVELOPED} 标记就原样放行。所以
+ *    `ApiContractModule` 被 import 多次（每个实例都会注册一个 `APP_INTERCEPTOR`）
+ *    也不会套出 `data.data`；测试里 `overrideProvider` 换上别的选项同样安全。
  *
  * ## 放行的情况（见 `wraps()`）
  *
@@ -34,8 +53,14 @@ import { NO_ENVELOPE_METADATA } from './no-envelope.decorator';
  */
 @Injectable()
 export class ResponseEnvelopeInterceptor implements NestInterceptor {
+  private readonly enabled: boolean;
+
+  constructor(options: ResponseEnvelopeOptions = {}) {
+    this.enabled = options.enabled ?? true;
+  }
+
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    if (!this.wraps(context)) {
+    if (!this.enabled || !this.wraps(context)) {
       return next.handle();
     }
 
@@ -70,20 +95,29 @@ export class ResponseEnvelopeInterceptor implements NestInterceptor {
       return value as ResponseBody;
     }
 
-    const base: SuccessBody<unknown> = { success: true, data: null };
-
-    if (isPaginatedResult(value)) {
-      // 分页结果 `{ data, meta }` 的两个字段**提到信封顶层**：
-      // 于是列表接口是 `{ success, data: [...], meta: {...} }`，
-      // 而不是多一层的 `data: { data, meta }`。
-      const paginated = value as { data: unknown; meta: unknown };
-
-      return { ...base, data: paginated.data, meta: paginated.meta };
+    // 已经被别的拦截器实例（重复注册的 `ApiContractModule`）包过了：原样放行。
+    if (isEnveloped(value)) {
+      return value as ResponseBody;
     }
 
-    // 返回 `undefined` / `null`（例如 handler 忘了 return）也走信封，`data` 为 `null` ——
-    // 保证前端拿到的形状不依赖 handler 写没写 return。
-    return { ...base, data: value ?? null };
+    const base: SuccessBody<unknown> = { success: true, data: null };
+    const body: ResponseBody = isPaginatedResult(value)
+      ? // 分页结果 `{ data, meta }` 的两个字段**提到信封顶层**：
+        // 于是列表接口是 `{ success, data: [...], meta: {...} }`，
+        // 而不是多一层的 `data: { data, meta }`。
+        {
+          ...base,
+          data: (value as { data: unknown }).data,
+          meta: (value as { meta: unknown }).meta,
+        }
+      : // 返回 `undefined` / `null`（例如 handler 忘了 return）也走信封，`data` 为 `null` ——
+        // 保证前端拿到的形状不依赖 handler 写没写 return。
+        { ...base, data: value ?? null };
+
+    // 打幂等标记；非枚举 ⇒ `JSON.stringify` 看不见，wire 形状不变。
+    Object.defineProperty(body, ENVELOPED, { value: true });
+
+    return body;
   }
 }
 

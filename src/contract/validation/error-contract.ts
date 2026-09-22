@@ -1,15 +1,21 @@
-import { ApiProperty } from '@nestjs/swagger';
+import type { ErrorBody } from '@nest-start/api-contract';
 
 /**
- * 字段级明细。失败响应（由 `AppExceptionFilter` 产出）里 `errors[]` 的元素：
+ * 失败侧契约。**形状本身定义在 `@nest-start/api-contract`**（前后端共享的那一份），
+ * 这里只补本地语境的说明与一个更贴合"错误侧"阅读习惯的别名。
+ *
+ * 失败响应由 `AppExceptionFilter` 产出：
  *
  * ```json
  * {
  *   "success": false,
  *   "error": "Bad Request",
  *   "message": "Request validation failed",
+ *   "code": "VALIDATION_FAILED",
+ *   "traceId": "3f1c9a4e-…",
  *   "errors": [
- *     { "field": "address.city", "message": "city must be longer than or equal to 2 characters" }
+ *     { "field": "address.city", "location": "body", "code": "INVALID_LENGTH",
+ *       "message": "city must be longer than or equal to 2 characters" }
  *   ]
  * }
  * ```
@@ -19,50 +25,30 @@ import { ApiProperty } from '@nestjs/swagger';
  * | 字段 | 给谁用 |
  * | --- | --- |
  * | HTTP 状态行 | 代理 / 缓存 / 监控（**数字状态码只在状态行里**） |
- * | `error` | HTTP 状态短语 |
+ * | `error` | HTTP 状态短语（无需查表的人话标识） |
+ * | `code` | **机器判据**：前端 `switch` 这个，不要 parse `message`；框架自身抛的错可能没有（可选） |
+ * | `traceId` | 把响应和日志对上的请求 id（同时回写在 `x-request-id` 响应头） |
  * | `message` | 人类可读说明 |
  * | `errors[].field` | **前端映射到表单字段**（嵌套用点号：`address.city`） |
- * | `errors[].message` | 终端用户 |
+ * | `errors[].location` | 这个路径来自 `body` / `query` / `param` —— 同名不同源时才分得清 |
+ * | `errors[].message` | 终端用户（可 i18n） |
  *
- * 完整契约（成功侧 `{ success, data, meta? }`）见 `../response/response-contract.ts`。
- * 本文件只放类型，不放实现 —— 过滤器（`./http-exception.filter`）与响应拦截器都依赖它。
+ * ⚠️ 这里**没有** `statusCode`：数字状态码只由 HTTP 状态行表达（过滤器调 `response.status(...)`），
+ * 在 body 里冗余一份只多一个"和状态行漂移"的隐患。见 `docs/validation.md` §9.2。
  *
- * ⚠️ **本契约有意不含机器可读的错误码（`code`）。** 代价是前端只能用
- * `error` + `message` 区分具体错误（比如 409 的"邮箱重复"和别的冲突）。
- * AIP-193 对此有明确警告：一旦客户端开始 parse message，文案就变成事实上的契约、
- * 以后不能改 —— 所以真要加 `code`，越早加越便宜。见 `docs/validation.md` §9.4。
+ * 契约层**不依赖任何 Swagger 包**：OpenAPI 里的投影（`$ref` / schema）全部在 `src/swagger/`，
+ * 用那里的 e2e 守卫（schema 属性 ↔ 运行时错误明细）保证两边不漂移。
  */
-export class ErrorDetail {
-  /** 出问题的字段路径，嵌套时用点号：`address.city`。 */
-  @ApiProperty({
-    description: '出问题的字段路径，嵌套时用点号',
-    example: 'address.city',
-  })
-  field: string;
-
-  /** 人类可读说明。 */
-  @ApiProperty({
-    description: '人类可读说明（具体规则看这里，message 只给概述）',
-    example: 'city must be longer than or equal to 2 characters',
-  })
-  message: string;
-}
+export type {
+  ErrorBody,
+  ErrorDetail,
+  ErrorLocation,
+} from '@nest-start/api-contract';
 
 /**
- * 失败响应的形状（由 `AppExceptionFilter` 产出）。
+ * 失败响应形状的**本地别名**：与 `../response/response-contract.ts` 的 `ErrorBody` 是同一个类型。
  *
- * 与 `../response/response-contract.ts` 的 `ErrorBody` 是**同一形状的两个名字**，
- * 刻意如此：这个文件是"错误侧"读代码时的本地上下文，`ResponseBody` 是"整体契约"的入口。
- *
- * 注意**没有** `statusCode`：数字状态码只由 HTTP 状态行表达（过滤器用 `response.status(...)` 设置）。
+ * 保留这个名字是因为过滤器 / 校验工厂读起来需要"错误侧"的本地上下文，
+ * 而 `ResponseBody` 是"整体契约"的入口。两者同源 ⇒ 不存在两个定义漂移的可能。
  */
-export interface ApiErrorBody {
-  /** 判据：失败恒为 `false`（成功侧见 `SuccessBody.success`）。 */
-  success: false;
-  /** HTTP 状态的短语，如 `Bad Request`。 */
-  error: string;
-  /** 人类可读说明（校验失败时是固定概述，细节在 `errors[]`）。 */
-  message: string;
-  /** 字段级明细，只有校验类错误才有。 */
-  errors?: ErrorDetail[];
-}
+export type ApiErrorBody = ErrorBody;

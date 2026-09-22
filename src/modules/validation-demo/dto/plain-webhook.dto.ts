@@ -9,7 +9,8 @@
  * 2. 想把 payload 原样留下只能用 `@RawBody()`（参数级豁免），
  *    而且它不会让这个类型在别处也失去校验。
  *
- * 两种行为都由 `src/pipes/__tests__/validation-pipe.factory.spec.ts` 的单测覆盖。
+ * 两种行为都由 `src/modules/validation-demo/__tests__/validation-demo.e2e-spec.ts` 的
+ * `POST /validation-demo/webhooks/plain` 用例钉住（另见 `docs/validation.md` §4.4）。
  */
 export class PlainWebhookDto {
   [key: string]: unknown;

@@ -1,3 +1,12 @@
+# workspace 成员。
+#
+# 目前只有 `packages/api-contract`：**纯类型**的线上契约包（响应信封 / 分页 / 错误码）。
+# 服务端通过 tsconfig 的 `paths` 别名按**源码**做类型检查（编译后 import 被完全擦除，
+# 所以运行时不依赖它的构建产物）；前端 / BFF 按普通包消费 `dist` 里的 `.d.ts`
+# —— 契约只有一份定义，两边会同时编译失败，而不是线上才发现字段对不上。
+packages:
+  - 'packages/*'
+
 # pnpm 的构建脚本白名单（`pnpm approve-builds` 会往这里写）。
 #
 # ⚠️ 值**必须**是布尔 `true` / `false`：pnpm 的 `createAllowBuildFunction()`

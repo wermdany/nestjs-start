@@ -1,0 +1,1873 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/validation-demo/users": {
+      "post": {
+        "operationId": "ValidationDemoController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ResponseEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/UserDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "入参校验失败（`errors[]` 里是字段级明细）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Bad Request",
+                    "message": "Request validation failed",
+                    "code": "VALIDATION_FAILED",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
+                    "errors": [
+                      {
+                        "field": "name",
+                        "location": "body",
+                        "code": "INVALID_LENGTH",
+                        "message": "name must be longer than or equal to 2 characters"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源或路由不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Not Found",
+                    "message": "user 999999 not found",
+                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "业务冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Conflict",
+                    "message": "email neo@example.com already exists",
+                    "code": "EMAIL_ALREADY_EXISTS",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "未捕获的内部错误（细节只进日志，不进响应）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Internal Server Error",
+                    "message": "Internal server error",
+                    "code": "INTERNAL_ERROR",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "创建用户（body 走全局校验管道）",
+        "tags": [
+          "validation-demo"
+        ]
+      },
+      "get": {
+        "description": "分页元信息在信封顶层的 `meta`（不是 `data.meta`）：`totalItems` / `itemsPerPage` / `currentPage`。",
+        "operationId": "ValidationDemoController_findAll",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "每页条数，超过 50 会被截断成 50（不是报错）",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 10,
+              "example": 10,
+              "type": "number"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "description": "排序字段（只接受白名单里的列）",
+            "schema": {
+              "example": "id",
+              "type": "string",
+              "enum": [
+                "id",
+                "name",
+                "email"
+              ]
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "role",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "admin",
+                "editor",
+                "viewer"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "分页成功（`data` 是这一页的数据数组）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ResponseEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/UserDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "入参校验失败（`errors[]` 里是字段级明细）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Bad Request",
+                    "message": "Request validation failed",
+                    "code": "VALIDATION_FAILED",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
+                    "errors": [
+                      {
+                        "field": "name",
+                        "location": "body",
+                        "code": "INVALID_LENGTH",
+                        "message": "name must be longer than or equal to 2 characters"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源或路由不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Not Found",
+                    "message": "user 999999 not found",
+                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "未捕获的内部错误（细节只进日志，不进响应）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Internal Server Error",
+                    "message": "Internal server error",
+                    "code": "INTERNAL_ERROR",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "分页查询用户",
+        "tags": [
+          "validation-demo"
+        ]
+      }
+    },
+    "/validation-demo/users/{id}": {
+      "get": {
+        "operationId": "ValidationDemoController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "用户 id，从 1 开始",
+            "schema": {
+              "minimum": 1,
+              "example": 1,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ResponseEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/UserDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "入参校验失败（`errors[]` 里是字段级明细）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Bad Request",
+                    "message": "Request validation failed",
+                    "code": "VALIDATION_FAILED",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
+                    "errors": [
+                      {
+                        "field": "name",
+                        "location": "body",
+                        "code": "INVALID_LENGTH",
+                        "message": "name must be longer than or equal to 2 characters"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源或路由不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Not Found",
+                    "message": "user 999999 not found",
+                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "未捕获的内部错误（细节只进日志，不进响应）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Internal Server Error",
+                    "message": "Internal server error",
+                    "code": "INTERNAL_ERROR",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "查询单个用户",
+        "tags": [
+          "validation-demo"
+        ]
+      },
+      "patch": {
+        "description": "`UpdateUserDto` 由 `PartialType(CreateUserDto)` 生成：所有字段可选，但保留原校验规则。",
+        "operationId": "ValidationDemoController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "用户 id",
+            "schema": {
+              "minimum": 1,
+              "example": 1,
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新成功（只覆盖传入的字段）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ResponseEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/UserDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "入参校验失败（`errors[]` 里是字段级明细）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Bad Request",
+                    "message": "Request validation failed",
+                    "code": "VALIDATION_FAILED",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
+                    "errors": [
+                      {
+                        "field": "name",
+                        "location": "body",
+                        "code": "INVALID_LENGTH",
+                        "message": "name must be longer than or equal to 2 characters"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源或路由不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Not Found",
+                    "message": "user 999999 not found",
+                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "业务冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Conflict",
+                    "message": "email neo@example.com already exists",
+                    "code": "EMAIL_ALREADY_EXISTS",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "未捕获的内部错误（细节只进日志，不进响应）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Internal Server Error",
+                    "message": "Internal server error",
+                    "code": "INTERNAL_ERROR",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "局部更新用户",
+        "tags": [
+          "validation-demo"
+        ]
+      }
+    },
+    "/validation-demo/webhooks/body": {
+      "post": {
+        "operationId": "ValidationDemoController_receiveCheckedPayload",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "校验通过并回显载荷",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ResponseEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ReceivedCheckedBodyDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "入参校验失败（`errors[]` 里是字段级明细）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Bad Request",
+                    "message": "Request validation failed",
+                    "code": "VALIDATION_FAILED",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
+                    "errors": [
+                      {
+                        "field": "name",
+                        "location": "body",
+                        "code": "INVALID_LENGTH",
+                        "message": "name must be longer than or equal to 2 characters"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源或路由不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Not Found",
+                    "message": "user 999999 not found",
+                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "未捕获的内部错误（细节只进日志，不进响应）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Internal Server Error",
+                    "message": "Internal server error",
+                    "code": "INTERNAL_ERROR",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "webhook 对照 · @Body() 走默认校验",
+        "tags": [
+          "validation-demo"
+        ]
+      }
+    },
+    "/validation-demo/webhooks/raw-body": {
+      "post": {
+        "description": "同一个 `WebhookDto`，这条路跳过整个管道：未声明字段也会原样保留。",
+        "operationId": "ValidationDemoController_receiveRawBodyPayload",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "原样回显（含未声明字段）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ResponseEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ReceivedRawBodyDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "入参校验失败（`errors[]` 里是字段级明细）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Bad Request",
+                    "message": "Request validation failed",
+                    "code": "VALIDATION_FAILED",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
+                    "errors": [
+                      {
+                        "field": "name",
+                        "location": "body",
+                        "code": "INVALID_LENGTH",
+                        "message": "name must be longer than or equal to 2 characters"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源或路由不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Not Found",
+                    "message": "user 999999 not found",
+                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "未捕获的内部错误（细节只进日志，不进响应）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Internal Server Error",
+                    "message": "Internal server error",
+                    "code": "INTERNAL_ERROR",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "webhook 对照 · @RawBody() 参数级豁免",
+        "tags": [
+          "validation-demo"
+        ]
+      }
+    },
+    "/validation-demo/webhooks/plain": {
+      "post": {
+        "description": "开 `forbidNonWhitelisted` 时同样请求会变成 400（见 `docs/validation.md` §4.4）。",
+        "operationId": "ValidationDemoController_receivePlainPayload",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlainWebhookDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "载荷被 whitelist 剥空",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ResponseEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ReceivedPlainBodyDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "入参校验失败（`errors[]` 里是字段级明细）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Bad Request",
+                    "message": "Request validation failed",
+                    "code": "VALIDATION_FAILED",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
+                    "errors": [
+                      {
+                        "field": "name",
+                        "location": "body",
+                        "code": "INVALID_LENGTH",
+                        "message": "name must be longer than or equal to 2 characters"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源或路由不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Not Found",
+                    "message": "user 999999 not found",
+                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "未捕获的内部错误（细节只进日志，不进响应）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Internal Server Error",
+                    "message": "Internal server error",
+                    "code": "INTERNAL_ERROR",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "webhook 对照 · 无装饰器的 DTO 会被剥成空对象",
+        "tags": [
+          "validation-demo"
+        ]
+      }
+    },
+    "/validation-demo/no-content": {
+      "post": {
+        "operationId": "ValidationDemoController_returnNothing",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "没有返回值时 `data` 为 `null`（不是空响应体）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ResponseEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "nullable": true,
+                          "example": null
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "入参校验失败（`errors[]` 里是字段级明细）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Bad Request",
+                    "message": "Request validation failed",
+                    "code": "VALIDATION_FAILED",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
+                    "errors": [
+                      {
+                        "field": "name",
+                        "location": "body",
+                        "code": "INVALID_LENGTH",
+                        "message": "name must be longer than or equal to 2 characters"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源或路由不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Not Found",
+                    "message": "user 999999 not found",
+                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "未捕获的内部错误（细节只进日志，不进响应）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Internal Server Error",
+                    "message": "Internal server error",
+                    "code": "INTERNAL_ERROR",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "没有 return 值的 handler 也走信封",
+        "tags": [
+          "validation-demo"
+        ]
+      }
+    },
+    "/validation-demo/pipe-order/ids": {
+      "post": {
+        "description": "请求体是 JSON 数组：`[\"1\",\"2\"]` → `{ ids: [1,2] }`；`[\"a\"]` → 400。",
+        "operationId": "ValidationPipeOrderController_parseIds",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "转换成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ResponseEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/IdsDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "入参校验失败（`errors[]` 里是字段级明细）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Bad Request",
+                    "message": "Request validation failed",
+                    "code": "VALIDATION_FAILED",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
+                    "errors": [
+                      {
+                        "field": "name",
+                        "location": "body",
+                        "code": "INVALID_LENGTH",
+                        "message": "name must be longer than or equal to 2 characters"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源或路由不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Not Found",
+                    "message": "user 999999 not found",
+                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "未捕获的内部错误（细节只进日志，不进响应）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Internal Server Error",
+                    "message": "Internal server error",
+                    "code": "INTERNAL_ERROR",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "局部 ParseArrayPipe 生效（全局管道跳过内置类型 Array）",
+        "tags": [
+          "validation-demo"
+        ]
+      }
+    },
+    "/validation-demo/pipe-order/strict": {
+      "post": {
+        "description": "非法 body 仍然是 **400**，不是 422 —— 全局管道的 400 先抛出了。",
+        "operationId": "ValidationPipeOrderController_strictOverride",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "合法 body 原样回显",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ResponseEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/StrictProbeResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "入参校验失败（`errors[]` 里是字段级明细）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Bad Request",
+                    "message": "Request validation failed",
+                    "code": "VALIDATION_FAILED",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
+                    "errors": [
+                      {
+                        "field": "name",
+                        "location": "body",
+                        "code": "INVALID_LENGTH",
+                        "message": "name must be longer than or equal to 2 characters"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源或路由不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Not Found",
+                    "message": "user 999999 not found",
+                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "未捕获的内部错误（细节只进日志，不进响应）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Internal Server Error",
+                    "message": "Internal server error",
+                    "code": "INTERNAL_ERROR",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "反例：局部管道配 422 也没用（全局管道先跑）",
+        "tags": [
+          "validation-demo"
+        ]
+      }
+    },
+    "/validation-demo/pipe-order/array-message": {
+      "get": {
+        "description": "抛 `new BadRequestException([...])`（Nest 内建管道的传统形状），观察 `errors[]` 不丢明细。",
+        "operationId": "ValidationPipeOrderController_arrayMessage",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "永远不会成功 —— 这里只是把失败形状做成活文档",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ResponseEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "nullable": true,
+                          "example": null
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "入参校验失败（`errors[]` 里是字段级明细）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Bad Request",
+                    "message": "Request validation failed",
+                    "code": "VALIDATION_FAILED",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
+                    "errors": [
+                      {
+                        "field": "name",
+                        "location": "body",
+                        "code": "INVALID_LENGTH",
+                        "message": "name must be longer than or equal to 2 characters"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源或路由不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Not Found",
+                    "message": "user 999999 not found",
+                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "未捕获的内部错误（细节只进日志，不进响应）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Internal Server Error",
+                    "message": "Internal server error",
+                    "code": "INTERNAL_ERROR",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "反例：数组型 message 的异常也会被规范化进 errors[]",
+        "tags": [
+          "validation-demo"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "nestjs-start API",
+    "description": "`nestjs-start` 的接口文档。\n\n**响应契约**：\n- 成功 `{ success: true, data, meta? }`\n- 失败 `{ success: false, error, message, code?, traceId?, errors? }`\n\n`success` 是唯一判据；`code` 是机器判据（**不要 parse `message`**）；\n数字状态码只在 HTTP 状态行里；`traceId` 同时回写在 `x-request-id` 响应头。\n详见 `docs/validation.md` §9。",
+    "version": "1.0.0",
+    "contact": {},
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "tags": [
+    {
+      "name": "validation-demo",
+      "description": "参数校验 / 响应契约的活文档（内存版 users 资源）"
+    }
+  ],
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "本地开发"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "AddressDto": {
+        "type": "object",
+        "properties": {
+          "street": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 40
+          },
+          "city": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 30
+          },
+          "zip": {
+            "type": "string",
+            "pattern": "^\\d{5,6}$"
+          }
+        },
+        "required": [
+          "street",
+          "city"
+        ]
+      },
+      "CreateUserDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "用户名（不允许 admin / root / system 等保留字；首尾空格会被去掉）",
+            "minLength": 2,
+            "maxLength": 20,
+            "example": "Neo"
+          },
+          "email": {
+            "type": "string",
+            "description": "邮箱，全局唯一（比较前会去空格并转小写）",
+            "format": "email",
+            "example": "neo@example.com"
+          },
+          "age": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 150,
+            "description": "年龄",
+            "example": 30
+          },
+          "role": {
+            "description": "角色",
+            "enum": [
+              "admin",
+              "editor",
+              "viewer"
+            ],
+            "type": "string",
+            "example": "viewer"
+          },
+          "tags": {
+            "maxItems": 5,
+            "description": "标签（最多 5 个）",
+            "example": [
+              "founder"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "address": {
+            "description": "地址（嵌套对象）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AddressDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "email",
+          "role"
+        ]
+      },
+      "UpdateUserDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "用户名（不允许 admin / root / system 等保留字；首尾空格会被去掉）",
+            "minLength": 2,
+            "maxLength": 20,
+            "example": "Neo"
+          },
+          "email": {
+            "type": "string",
+            "description": "邮箱，全局唯一（比较前会去空格并转小写）",
+            "format": "email",
+            "example": "neo@example.com"
+          },
+          "age": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 150,
+            "description": "年龄",
+            "example": 30
+          },
+          "role": {
+            "description": "角色",
+            "enum": [
+              "admin",
+              "editor",
+              "viewer"
+            ],
+            "type": "string",
+            "example": "viewer"
+          },
+          "tags": {
+            "maxItems": 5,
+            "description": "标签（最多 5 个）",
+            "example": [
+              "founder"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "address": {
+            "description": "地址（嵌套对象）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AddressDto"
+              }
+            ]
+          }
+        }
+      },
+      "WebhookDto": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 40
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "event",
+          "data",
+          "count"
+        ]
+      },
+      "PlainWebhookDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UserDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "自增 id，从 1 开始",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "description": "用户名",
+            "example": "Neo",
+            "minLength": 2,
+            "maxLength": 20
+          },
+          "email": {
+            "type": "string",
+            "description": "邮箱",
+            "example": "neo@example.com",
+            "format": "email"
+          },
+          "age": {
+            "type": "number",
+            "description": "年龄",
+            "example": 30,
+            "minimum": 0,
+            "maximum": 150
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "editor",
+              "viewer"
+            ],
+            "type": "string",
+            "description": "角色",
+            "example": "admin"
+          },
+          "tags": {
+            "description": "标签",
+            "example": [
+              "founder"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "address": {
+            "description": "地址",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AddressDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "role",
+          "tags"
+        ]
+      },
+      "IdsDto": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "description": "被局部 `ParseArrayPipe({ items: Number })` 转换后的数字数组",
+            "example": [
+              1,
+              2
+            ],
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "ids"
+        ]
+      },
+      "StrictProbeResultDto": {
+        "type": "object",
+        "properties": {
+          "received": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "局部 `ValidationPipe` 配了 422，但全局管道先跑 ⇒ 非法 body 仍然是 400"
+          },
+          "note": {
+            "type": "string",
+            "description": "固定说明文案",
+            "example": "global pipe runs first, see docs/validation.md"
+          }
+        },
+        "required": [
+          "received",
+          "note"
+        ]
+      },
+      "ReceivedCheckedBodyDto": {
+        "type": "object",
+        "properties": {
+          "received": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "经过校验管道处理后的载荷（未声明字段已被 whitelist 剥掉）"
+          }
+        },
+        "required": [
+          "received"
+        ]
+      },
+      "ReceivedRawBodyDto": {
+        "type": "object",
+        "properties": {
+          "received": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "`@RawBody()` 原样回显的载荷 —— 跳过整个管道，未声明字段**也会**保留"
+          }
+        },
+        "required": [
+          "received"
+        ]
+      },
+      "ReceivedPlainBodyDto": {
+        "type": "object",
+        "properties": {
+          "received": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "`PlainWebhookDto` 一个校验装饰器都没有 ⇒ 每个字段都算未声明 ⇒ 被 whitelist 剥成 `{}`",
+            "example": {}
+          }
+        },
+        "required": [
+          "received"
+        ]
+      },
+      "ResponseEnvelope": {
+        "type": "object",
+        "required": [
+          "success",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "data": {
+            "description": "handler 的返回值（分页时是这一页的数据数组）"
+          },
+          "meta": {
+            "description": "仅分页成功时出现",
+            "type": "object",
+            "required": [
+              "totalItems",
+              "itemsPerPage",
+              "currentPage"
+            ],
+            "properties": {
+              "totalItems": {
+                "type": "integer",
+                "example": 3
+              },
+              "itemsPerPage": {
+                "type": "integer",
+                "example": 50
+              },
+              "currentPage": {
+                "type": "integer",
+                "example": 1
+              }
+            }
+          }
+        }
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "required": [
+          "success",
+          "error",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "error": {
+            "type": "string",
+            "example": "Bad Request"
+          },
+          "message": {
+            "type": "string",
+            "example": "Request validation failed"
+          },
+          "code": {
+            "description": "机器可读的错误码（前端 `switch` 这个，不要 parse `message`）。框架自身抛的错可能没有。",
+            "type": "string",
+            "enum": [
+              "VALIDATION_FAILED",
+              "EMAIL_ALREADY_EXISTS",
+              "USER_NOT_FOUND",
+              "INTERNAL_ERROR",
+              "REQUIRED",
+              "INVALID_TYPE",
+              "INVALID_FORMAT",
+              "INVALID_LENGTH",
+              "OUT_OF_RANGE",
+              "NOT_ALLOWED_VALUE",
+              "RESERVED_NAME",
+              "TOO_MANY_ITEMS",
+              "UNKNOWN_FIELD",
+              "UNKNOWN_CONSTRAINT"
+            ],
+            "example": "VALIDATION_FAILED"
+          },
+          "traceId": {
+            "description": "请求 id：同时回写在 `x-request-id` 响应头、并写进服务端日志，用来把一次响应和日志对上。",
+            "type": "string",
+            "example": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+          },
+          "errors": {
+            "description": "仅校验类失败才有（`field` 是权威定位，嵌套用点号）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ErrorDetail"
+            }
+          }
+        }
+      },
+      "ErrorDetail": {
+        "type": "object",
+        "required": [
+          "field",
+          "message"
+        ],
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "出问题的字段路径，嵌套时用点号",
+            "example": "address.city"
+          },
+          "message": {
+            "type": "string",
+            "description": "人类可读说明（`message` 只给概述，具体规则看这里）",
+            "example": "city must be longer than or equal to 2 characters"
+          },
+          "location": {
+            "description": "这个字段路径来自哪里（`@Body()` / `@Query()` / `@Param()` 各不同）。同名不同源时靠它区分。",
+            "type": "string",
+            "enum": [
+              "body",
+              "query",
+              "param"
+            ],
+            "example": "body"
+          },
+          "code": {
+            "description": "字段级的机器可读错误码（语义化，不是 class-validator 的约束名）",
+            "type": "string",
+            "enum": [
+              "VALIDATION_FAILED",
+              "EMAIL_ALREADY_EXISTS",
+              "USER_NOT_FOUND",
+              "INTERNAL_ERROR",
+              "REQUIRED",
+              "INVALID_TYPE",
+              "INVALID_FORMAT",
+              "INVALID_LENGTH",
+              "OUT_OF_RANGE",
+              "NOT_ALLOWED_VALUE",
+              "RESERVED_NAME",
+              "TOO_MANY_ITEMS",
+              "UNKNOWN_FIELD",
+              "UNKNOWN_CONSTRAINT"
+            ],
+            "example": "INVALID_LENGTH"
+          }
+        }
+      }
+    }
+  }
+}

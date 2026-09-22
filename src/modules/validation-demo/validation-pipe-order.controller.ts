@@ -1,6 +1,8 @@
 import {
+  BadRequestException,
   Body,
   Controller,
+  Get,
   HttpStatus,
   ParseArrayPipe,
   Post,
@@ -8,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { createValidationPipe } from '@/contract';
+import { ApiOkEnvelope } from '@/swagger/api-envelope.decorator';
 import { ApiCreatedEnvelope } from '@/swagger/api-envelope.decorator';
 import { ApiEnvelopeErrors } from '@/swagger/api-errors.decorator';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -70,5 +73,32 @@ export class ValidationPipeOrderController {
       received: dto,
       note: 'global pipe runs first, see docs/validation.md',
     };
+  }
+
+  /**
+   * **不是**本仓库校验管道抛的异常长什么样。
+   *
+   * Nest 内建 / 第三方管道与守卫的**传统载荷**是 `{ statusCode, message: string[], error }`
+   * —— `message` 是**字符串数组**。`AppExceptionFilter` 会把它规范化成：
+   *
+   * ```json
+   * { "success": false, "error": "Bad Request",
+   *   "message": "title must be a string",              // 兜底成第一条明细
+   *   "errors": [ { "field": "(request)", "message": "title must be a string" },
+   *               { "field": "(request)", "message": "title too long" } ],
+   *   "traceId": "…" }                                   // 注意：没有 code（来源没有语义）
+   * ```
+   *
+   * 没有这一层规范化的话，`message` 会退化成状态短语 `"Bad Request"`、`errors` 整个消失。
+   */
+  @Get('array-message')
+  @ApiOperation({
+    summary: '反例：数组型 message 的异常也会被规范化进 errors[]',
+    description:
+      '抛 `new BadRequestException([...])`（Nest 内建管道的传统形状），观察 `errors[]` 不丢明细。',
+  })
+  @ApiOkEnvelope('null', '永远不会成功 —— 这里只是把失败形状做成活文档')
+  arrayMessage(): never {
+    throw new BadRequestException(['title must be a string', 'title too long']);
   }
 }

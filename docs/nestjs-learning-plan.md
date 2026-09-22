@@ -893,17 +893,27 @@ npx nest g service cats --flat --no-spec   # 不建目录、不生成 .spec.ts
 
 ### 5.1 Configuration（配置）
 
-📖 [https://docs.nestjs.com/techniques/configuration](https://docs.nestjs.com/techniques/configuration) · 需装 `@nestjs/config`
+📖 [https://docs.nestjs.com/techniques/configuration](https://docs.nestjs.com/techniques/configuration) · 已装 `@nestjs/config@4`
 
 - `ConfigModule.forRoot({ isGlobal: true })` + 根目录 `.env`；`ConfigService.get('PORT')` / `getOrThrow('X')`。
 - 类型化配置：`registerAs('db', () => ({...}))` + `ConfigService.get('db.host')` / `ConfigType<typeof ...>`。
 - 启动时校验：`validate` 选项（配 `class-validator` 或 `joi`）。
 - `.env` **必须**进 `.gitignore`；用 `.env.example` 提交模板。
-- 练习：
-  - [ ] 安装 `@nestjs/config`，把 `main.ts` 里硬编码的 `3000` 改成 `configService.get('PORT')`。
-  - [ ] 建 `.env.example`，确认 `.env` 已被 `.gitignore` 忽略。
-  - [ ] 用 `registerAs` 写一个 `app` 命名空间配置，并带类型使用。
-  - [ ] 用 `validate` 让缺少必填变量时**启动失败**。
+- 🔍 **本仓库对照**：`src/config/`（5 个 namespace：`app` / `swagger` / `cors` / `throttle` / `database`），
+  完整说明见 [`docs/configuration.md`](configuration.md)。三个值得注意的结论：
+  - `ConfigModule.forRoot()` 是 **async** 且在**模块定义时**执行校验 —— 校验失败会走 Nest 内部的
+    `ExceptionHandler`（一行带堆栈的 ERROR），**不经过 `bootstrap().catch`**；所以本仓库把
+    `validateEnv(process.env)` 放在 `main.ts` 的第一行显式调用；
+  - 默认值只在 `read*Config()` 里，校验器不注入默认值 —— 避免"两处默认值漂移"；
+  - `@nestjs/config` 目前必须锁 `^4.0.4`（12.x 是 ESM-only，本仓库是 CJS → TS1479）。
+- 练习（均已完成）：
+  - [x] 安装 `@nestjs/config`，把 `main.ts` 里硬编码的 `3000` 改成配置里的 `app.port`。
+  - [x] 建 `.env.example`，确认 `.env` / `.env.local` 已被 `.gitignore` 忽略（`.env.*` + `!.env.example`）。
+  - [x] 用 `registerAs` 写命名空间配置，并带类型使用（`AppConfig` / `SwaggerConfig` / `DatabaseConfig` …）。
+  - [x] 让不合法的配置值**启动失败**：`PORT=abc node dist/main` → 非零退出 + 多行问题清单。
+  - [ ] 进阶（未做）：`ConfigModule.forRoot({ validate })` 与"入口显式校验"的取舍，见
+    `docs/configuration.md` §5.1 —— 想自己验证的话，把它接回去跑一次 `PORT=abc node dist/main`，
+    观察错误形态的差别。
 
 ### 5.2 Validation（校验）
 

@@ -229,6 +229,13 @@ PublishScripts/
 # Uncomment if necessary however generally it will be regenerated when needed
 #!**/[Pp]ackages/repositories.config
 # NuGet v3's project.json files produces more ignorable files
+
+# ⚠️ 上面那条 `**/[Pp]ackages/*` 来自 VisualStudio 模板，会连本仓库的 workspace 成员一起吞掉
+# （`packages/api-contract` 是**要入库**的共享契约包）。gitignore 的规则是"父目录被排除就不再
+# 向下遍历"，所以必须先把它自己 negate 回来；它的子文件不再匹配上面那条（那个 `*` 不跨 `/`）。
+!packages/api-contract/
+# 但构建产物仍然要忽略。
+packages/api-contract/dist/
 *.nuget.props
 *.nuget.targets
 
@@ -395,6 +402,10 @@ Temporary Items
 =======
 # Local
 .env
+# 上面那条只忽略 `.env` 本身；`.env.local` / `.env.development.local` / `.env.production`
+# 同样可能含密钥，用 `.env.*` 一起覆盖，再把**可入库的模板** negate 回来（`!` 必须在后面）。
+.env.*
+!.env.example
 dist
 .webpack
 .serverless/**/*.zip

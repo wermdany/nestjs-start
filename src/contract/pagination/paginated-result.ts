@@ -1,18 +1,15 @@
+import type { PaginatedResult } from '@nest-start/api-contract';
 import { PAGINATED_RESULT } from '../response/response-contract';
 import { PaginationQueryDto } from './pagination-query.dto';
 
-/** 列表接口的统一响应形状。 */
-export interface PaginatedResult<T> {
-  data: T[];
-  meta: PaginationMeta;
-}
-
 /**
- * 分页元信息。只保留三个**服务端才知道**的数：
+ * 列表接口的统一响应形状（**定义在 `@nest-start/api-contract`**，与前端共享）。
+ *
+ * 这里只保留"服务端才知道"的那三笔数的文档：
  *
  * | 字段 | 含义 |
  * | --- | --- |
- * | `totalItems` | 过滤之后的总条数 |
+ * | `totalItems` | 过滤之后的总条数（不是这一页的长度） |
  * | `itemsPerPage` | 这一页的页大小（已按 `PAGE_SIZE_MAX` 截断） |
  * | `currentPage` | 当前页码（从 1 开始） |
  *
@@ -23,11 +20,7 @@ export interface PaginatedResult<T> {
  * 字段命名对齐 [nestjs-paginate](https://github.com/ppetzold/nestjs-paginate)（JSON:API 风格），
  * 以后换库或对齐前端都不用改字段名。
  */
-export interface PaginationMeta {
-  totalItems: number;
-  itemsPerPage: number;
-  currentPage: number;
-}
+export type { PaginatedResult, PaginationMeta } from '@nest-start/api-contract';
 
 /**
  * 把「已经切好的一页数据 + 过滤后的总数」拼成统一响应。

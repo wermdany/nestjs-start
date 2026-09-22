@@ -1,6 +1,20 @@
 # 复盘与优化清单（Review & Improvement Backlog）
 
-> 对象：本仓库 `src/contract/`、`src/swagger/`、`src/modules/validation-demo/` 三个**已实现**模块。
+> **状态更新（同一仓库内已实施）**
+>
+> | 范围 | 状态 |
+> | --- | --- |
+> | §1 P0（幂等信封 / null 语义 / 过滤器规范化 / 归一化） | ✅ 已修复 + 回归用例 |
+> | §2 P1（`location` / `code` / `traceId` / `ErrorDetail` 解耦 / options token + `forRootAsync`（现已由 `AppModule` 从配置消费）/ `buildDocument` 单源 / 共享契约包） | ✅ 已修复 + 回归用例 |
+> | §3.4 配置层 | ✅ 已修复（`src/config/`，见 [`docs/configuration.md`](configuration.md)） |
+> | §3 其余（`strict` / 单测 / CI / 平台模块 / 日志 / OpenAPI CI） | ⬜ 未做 |
+> | §4 P3（Guard / Repository / 分页演进 / 序列化层） | ⬜ 未做 |
+>
+> 下面的正文保留**当时的分析原样**（包括"修复前"的现象与实测输出），
+> 作为"问题是怎么被发现、怎么被验证"的记录；实现说明见
+> [`docs/configuration.md`](configuration.md)、[`docs/validation.md`](validation.md) 与 [`README.md`](../README.md)。
+
+> 对象：本仓库 `src/contract/`、`src/swagger/`、`src/config/`、`src/modules/validation-demo/` 四个**已实现**模块。
 > 方法：通读源码 + 文档 + e2e，然后在真实进程上做边界探测（`node dist/main` + `curl`）。
 > 原则：只写**能复现**的问题，每条给出「现象 → 根因 → 社区对照 → 方案 → 验收」。
 > 已经写明「有意没做」的事（`docs/validation.md` §7 / §9.6）不重复建议，只在触发条件到了的地方提醒排期。
@@ -335,21 +349,29 @@ DTO 的 `TS2564` 是**框架惯例**，官方示例用**明确赋值断言 `!`**
 再补一句 `pnpm format --check`（现在只有写、没有检查），以及 `package.json` 的
 `"packageManager": "pnpm@x.y.z"` 固定包管理器版本。
 
-### 3.4 没有配置层 🟠（学习计划 §5.1 的练习项，建议直接做掉）
+### 3.4 没有配置层 ✅ 已修复
 
 `main.ts` 硬编码 `3000`；`isSwaggerEnabled(process.env)` 直接读环境；没有 `.env.example`；没有启动期校验。
 
-**方案**：`@nestjs/config` + `registerAs('app', ...)` + `validate`（zod / joi / class-validator 都行）：
+**当时的方案**：`@nestjs/config` + `registerAs('app', ...)` + `validate`。
 
-```ts
-ConfigModule.forRoot({ isGlobal: true, validate: validateEnv, cache: true });
-// main.ts
-const config = app.get(ConfigService);
-await app.listen(config.getOrThrow<number>('app.port'));
-```
+**实际落地**（`src/config/`，完整说明见 [`docs/configuration.md`](configuration.md)）：
 
-配 `validateEnv` 后，「少了必填环境变量」从「跑到某条路径才 500」变成**启动即失败** ——
-这正是学习计划 §5.1 那个练习的价值，也让 §2.5 的 `forRootAsync` 有了真实用例。
+- 五个 namespace：`app`（已接线：端口/主机）、`swagger`（已接线：启停/serverUrl）、
+  `cors` / `throttle`（🅿️ 预留，A2）、`database`（🅿️ 预留，B1，含连接契约）；
+- 校验用**已有的 class-validator**（不引 zod/Joi），默认值只在 `read*Config()` 里（单一来源）；
+- `.env.example` 入库、`.gitignore` 补 `.env.*` + `!.env.example`；
+- **一处对原方案的修正**：校验**没有**走 `ConfigModule.forRoot({ validate })`。
+  `forRoot` 是 async + 在模块定义期执行，失败会走 Nest 内部的 `ExceptionHandler`
+  （一行带堆栈的 ERROR），既到不了 `bootstrap().catch`，也会被"任何 import 到配置模块的代码"触发。
+  改为在入口第一行显式 `validateEnv(process.env)`：位置固定、可捕获、多行清单、无堆栈。
+- **顺带修掉的坑**：`helmet` 曾被放进 `devDependencies`（运行时 import 它 → `pnpm install --prod`
+  后 `node dist/main` 会 `Cannot find module`）；`@nestjs/config` 必须锁 `^4.0.4`
+  （12.x 是 ESM-only，本仓库 CJS 会 `TS1479`）。两条都写进了 README 的"踩过的坑"。
+
+验收（实测）：`PORT=abc node dist/main` → 退出码 1 + 多行问题清单、无堆栈；
+`NODE_ENV=production DATABASE_SYNCHRONIZE=true` → 拒绝启动；
+`.env` 里的 `PORT=4300` 生效；`PORT=4100` 覆盖默认端口。
 
 ### 3.5 生产基本盘（与「已实现模块」直接相关的部分）🟠
 
@@ -424,13 +446,13 @@ await app.listen(config.getOrThrow<number>('app.port'));
 
 按「风险 ↓ / 成本 ↑」排序，每步都能独立合并、独立验证：
 
-- [ ] **① 修 P0 四件套**（§1.1 幂等信封、§1.2 null 语义、§1.3 过滤器规范化、§1.4 email 规范化）
+- [x] **① 修 P0 四件套**（§1.1 幂等信封、§1.2 null 语义、§1.3 过滤器规范化、§1.4 email 规范化）
       —— 验收：新增 4 条 e2e/单测即可回归
 - [ ] **② 打开 `strict`**（§3.1，37 处）+ `format --check` + `packageManager` 字段
 - [ ] **③ 补 `test` / `test:cov` + 首批单测 + 清掉失效文档引用**（§3.2）
 - [ ] **④ 加 CI**（§3.3）：lint → build → test
-- [ ] **⑤ 配置层**（§3.4）+ **`forRootAsync`/options token**（§2.5）
-- [ ] **⑥ 错误契约升级：`code` + `location` + `traceId`**（§2.1–2.3）—— 一次改动，三处受益
+- [x] **⑤ 配置层**（§3.4，`src/config/`）+ **`forRootAsync`/options token**（§2.5）
+- [x] **⑥ 错误契约升级：`code` + `location` + `traceId`**（§2.1–2.3）—— 一次改动，三处受益
 - [ ] **⑦ 平台模块**（§3.5）：helmet / CORS / throttler / shutdown hooks / prefix
 - [ ] **⑧ Swagger 单一构建函数 + `openapi.json` 快照 + 破坏性变更检测**（§2.6、§3.7）
 - [ ] **⑨ 契约包 + 客户端类型生成**（§2.7）
