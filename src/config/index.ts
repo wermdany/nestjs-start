@@ -28,12 +28,16 @@ export {
   DEFAULT_DATABASE_SSL,
   DEFAULT_DATABASE_SYNCHRONIZE,
   DEFAULT_ENVELOPE,
+  DEFAULT_JWT_EXPIRES_IN,
+  DEFAULT_JWT_SECRET,
   DEFAULT_NODE_ENV,
   DEFAULT_PORT,
   DEFAULT_STRICT_VALIDATION,
   DEFAULT_SWAGGER_SERVER_URL,
   DEFAULT_THROTTLE_LIMIT,
   DEFAULT_THROTTLE_TTL_SECONDS,
+  JWT_EXPIRES_IN_PATTERN,
+  JWT_SECRET_MIN_WARN_LENGTH,
   NODE_ENVS,
   parseCorsOrigins,
   toBoolean,
@@ -43,7 +47,7 @@ export {
 } from './env';
 export type { DatabaseDriver } from './env';
 
-// ── 五个 namespace 的读取函数与 registerAs 工厂 ───────────────────────────────
+// ── 六个 namespace 的读取函数与 registerAs 工厂 ───────────────────────────────
 export { appConfig, readAppConfig } from './app.config';
 export type { AppConfig } from './app.config';
 
@@ -57,6 +61,9 @@ export {
   throttleConfig,
 } from './platform.config';
 export type { CorsConfig, ThrottleConfig } from './platform.config';
+
+export { jwtConfig, readJwtConfig } from './jwt.config';
+export type { JwtConfig } from './jwt.config';
 
 export { databaseConfig, readDatabaseConfig } from './database.config';
 export type { DatabaseConfig } from './database.config';

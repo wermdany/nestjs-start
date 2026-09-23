@@ -2,5 +2,16 @@
   "extends": "./tsconfig.json",
   // ⚠️ `exclude` **不会**与基类合并（是覆盖），所以 `packages` 必须在这里再写一次：
   // 拉进契约包源码会让 rootDir 从 `src` 变成仓库根，产物变成 `dist/src/main.js`。
-  "exclude": ["node_modules", "dist", "test", "packages", "**/*spec.ts"]
+  //
+  // `**/__tests__/**` 是整个目录一起排除：只排 `**/*spec.ts` 的话，
+  // 测试替身（`__tests__/fixtures/*.ts`，名字里没有 `spec`）会被 emit 进 `dist/`
+  // —— 那是只该活在测试里的代码，不该发布。
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test",
+    "packages",
+    "**/*spec.ts",
+    "**/__tests__/**"
+  ]
 }

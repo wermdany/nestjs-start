@@ -7,13 +7,14 @@
 pnpm install            # 直接跑即可
 cp .env.example .env    # 可选：不建也能跑（一切都有默认值）
 pnpm start:dev          # http://localhost:3000 ，文档在 /docs
-pnpm test:e2e           # 契约测试（响应形状 + OpenAPI 文档 + 配置校验）
+pnpm test:e2e           # 契约测试（响应形状 + 权限 + OpenAPI 文档 + 配置校验）
+pnpm test               # 单元测试（判定逻辑与纯函数，jest.json）
 ```
 
-启动时会打一行**不含任何密码**的配置摘要，并标出哪些配置还是"预留"状态：
+启动时会打一行**不含任何密码、也不含任何 token**的配置摘要，并标出哪些配置还是"预留"状态：
 
 ```
-[bootstrap] env=development port=3000 host=(默认: 全部网卡) swagger=on(http://localhost:3000) cors=*(预留) throttle=60s/100(预留) db=memory(预留)
+[bootstrap] env=development port=3000 host=(默认: 全部网卡) swagger=on(http://localhost:3000) jwt=expires:1h,secret:(默认) cors=*(预留) throttle=60s/100(预留) db=memory(预留)
 ```
 
 环境变量不合法 → **进程拒绝启动**，并一次性列出全部问题（无堆栈）：
@@ -29,8 +30,9 @@ pnpm test:e2e           # 契约测试（响应形状 + OpenAPI 文档 + 配置�
 // src/app.module.ts
 @Module({
   imports: [
-    AppConfigModule,               // 配置：加载 .env + 五个类型化 namespace
+    AppConfigModule,               // 配置：加载 .env + 六个类型化 namespace
     ApiContractModule.forRoot(),   // 契约：管道 / 过滤器 / 拦截器 / 请求 id
+    AuthModule.forRoot(),          // 认证：JWT 登录 + 全局守卫（密钥来自 JWT_SECRET）
     ValidationDemoModule,
   ],
 })
@@ -42,12 +44,13 @@ export class AppModule {}
 
 | 能力 | 实现 | 干什么 |
 | --- | --- | --- |
-| 配置 | `AppConfigModule` | `.env` 加载 + **启动即校验**；五个 namespace：`app` / `swagger` / `cors` / `throttle` / `database`（后三个是预留） |
+| 配置 | `AppConfigModule` | `.env` 加载 + **启动即校验**；六个 namespace：`app` / `swagger` / `cors` / `throttle` / `auth` / `database`（`cors` / `throttle` / `database` 是预留） |
 | 入参校验 | `ContractValidationPipe` → `APP_PIPE` | body / query / param 全过 `ValidationPipe`（`whitelist` + `transform`），错误是结构化的，且每条明细带 `location` |
-| 失败响应 | `AppExceptionFilter` → `APP_FILTER` | 400 / 404 / 409 / 500 统一成同一个形状；连**别人抛的**数组型 `message` 也规范化；内部异常只回通用文案，堆栈只进日志 |
+| 失败响应 | `AppExceptionFilter` → `APP_FILTER` | 400 / 401 / 403 / 404 / 409 / 500 统一成同一个形状；连**别人抛的**数组型 `message` 也规范化；内部异常只回通用文案，堆栈只进日志；异常自带的响应头（如 `WWW-Authenticate`）在 `json()` 之前写出 |
 | 成功响应 | `ResponseEnvelopeInterceptor` → `APP_INTERCEPTOR` | 所有成功返回值包成同一个形状，分页的 `meta` 提到顶层；**幂等**（模块被 import 多次也不会套两层） |
+| 认证 | `AuthModule`（`JwtAuthGuard` → `APP_GUARD`） | 登录签发 JWT（内存用户表），**默认拒绝**：`@Public()` 之外的所有路由都要 `Authorization: Bearer`，否则 401 `UNAUTHENTICATED` + `WWW-Authenticate`；token 里只有身份，没有角色 / 权限 |
 | 机器判据 | `ErrorCode` + `ApiException` | 业务异常带稳定 `code`，前端 `switch (body.code)` 而不是 parse `message` |
-| 可观测 | `RequestIdMiddleware` | 每个请求一个 id：`AsyncLocalStorage` + `x-request-id` 响应头 + 失败信封的 `traceId` |
+| 可观测 | `RequestIdMiddleware` | 每个请求一个 id：`AsyncLocalStorage` + `x-request-id` 响应头 + 失败信封的 `traceId`；认证成功后 `userId` 进同一个上下文 |
 | 参数级豁免 | `@RawBody()` | 同一条路由跳过整个管道（同一个 DTO 在别处照常校验） |
 | 可选非空 | `@IsOptionalNotNull()` | 可以不传，但显式传 `null` 会被拒（`@IsOptional()` 会放行 `null`，见 §"响应契约"） |
 | 接口文档 | `setupSwagger(app)` → `@nestjs/swagger` | `/docs` 上的 OpenAPI UI，schema 由 DTO 上的 class-validator 推导；`buildDocument()` 是唯一构建入口 |
@@ -136,6 +139,14 @@ $ curl -s localhost:3000/validation-demo/users/999999
 # 失败 · 框架（未匹配路由）→ HTTP 404（没有业务 code）
 $ curl -s localhost:3000/nope
 {"success":false,"error":"Not Found","message":"Cannot GET /nope","traceId":"…"}
+
+# 成功 · 登录 → HTTP 200（内存里的演示账号；token 里只有 sub + username）
+$ curl -s -X POST localhost:3000/auth/login -H 'content-type: application/json' -d '{"username":"neo","password":"matrix"}'
+{"success":true,"data":{"accessToken":"eyJ…","tokenType":"Bearer","expiresIn":3600}}
+
+# 失败 · 未认证 → HTTP 401（响应头另有 WWW-Authenticate: Bearer …）
+$ curl -s -i localhost:3000/auth/profile
+{"success":false,"error":"Unauthorized","message":"Missing or malformed credentials","code":"UNAUTHENTICATED","traceId":"…"}
 ```
 
 两个**必须知道的边界**：
@@ -151,10 +162,11 @@ $ curl -s localhost:3000/nope
 
 ## 配置
 
-一个入口、一份契约、**启动即校验**。`src/config/` 把环境变量收敛成五个类型化 namespace：
+一个入口、一份契约、**启动即校验**。`src/config/` 把环境变量收敛成六个类型化 namespace：
 
 ```ts
 const app = config.getOrThrow<AppConfig>('app');            // { env, port, host?, strictValidation, envelope }
+const auth = config.getOrThrow<AuthConfig>('auth');         // { tokens: [{ token, subjectId, roles }] }
 const db = config.getOrThrow<DatabaseConfig>('database');   // { driver, url?, host?, port?, ... }
 ```
 
@@ -162,6 +174,7 @@ const db = config.getOrThrow<DatabaseConfig>('database');   // { driver, url?, h
 | --- | --- | --- |
 | `app` | `NODE_ENV` / `PORT` / `HOST` / `STRICT_VALIDATION` / `ENABLE_ENVELOPE` | ✅ `main.ts` 用它监听，`app.module.ts` 用它配契约层 |
 | `swagger` | `ENABLE_SWAGGER` / `SWAGGER_SERVER_URL` | ✅ `main.ts` 用它开关 `/docs` |
+| `jwt` | `JWT_SECRET` / `JWT_EXPIRES_IN` | ✅ `app.module.ts` → `AuthModule`（**生产环境没配密钥或仍用默认值 = 拒绝启动**） |
 | `cors` | `CORS_ORIGINS` | 🅿️ 预留（A2 接 CORS） |
 | `throttle` | `THROTTLE_TTL_SECONDS` / `THROTTLE_LIMIT` | 🅿️ 预留（A2 接限流） |
 | `database` | `DATABASE_DRIVER` / `_URL` / `_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_NAME` / `_SCHEMA` / `_SSL` / `_POOL_SIZE` / `_LOGGING` / `_SYNCHRONIZE` / `_MIGRATIONS_RUN` | 🅿️ 预留（B1 接 ORM） |
@@ -171,9 +184,10 @@ const db = config.getOrThrow<DatabaseConfig>('database');   // { driver, url?, h
 - **默认值只有一处**：都定义在 `src/config/env.ts` 的导出常量里，校验器与读取函数共同 import；
   `validateEnv()` 只判断"给了的值"，不注入默认值。
 - **可选的 `null` 不放过**：`DATABASE_*` 的布尔项只认恰好 `true` / `false`，写 `yes` 直接启动失败。
-- **敏感值不落地**：`redactUrl()` 抹掉连接串里的用户名/密码，启动摘要与错误信息里都没有密码。
+- **敏感值不落地**：`redactUrl()` 抹掉连接串里的用户名/密码；JWT 密钥在启动摘要里只以
+  `secret:(默认｜已配置)` 出现（`jwt=expires:1h,secret:(默认)`），密钥本身永不进日志。
 
-配置**真的会被用上**（不是摆设）—— 两个已接线的消费者：
+配置**真的会被用上**（不是摆设）—— 三个已接线的消费者：
 
 ```ts
 // src/app.module.ts：环境变量 → 契约层选项
@@ -181,6 +195,12 @@ ApiContractModule.forRootAsync({
   inject: [ConfigService],
   useFactory: apiContractOptionsFactory,   // STRICT_VALIDATION → forbidNonWhitelisted
 });                                        // ENABLE_ENVELOPE   → envelope
+
+// src/app.module.ts：环境变量 → 认证层选项（凭证表）
+AuthModule.forRootAsync({
+  inject: [ConfigService],
+  useFactory: jwtOptionsFactory,           // JWT_SECRET / JWT_EXPIRES_IN → JwtModule
+});
 
 // src/main.ts：环境变量 → 监听端口 / 文档启停
 await app.listen(resolved.app.port, resolved.app.host);
@@ -298,16 +318,29 @@ packages/
 
 src/
 ├── main.ts                       入口（校验 env → create → helmet → describe → setupSwagger → listen）
-├── app.module.ts                 组装：AppConfigModule + ContractModule + 业务模块
+├── app.module.ts                 组装：AppConfigModule + ContractModule + AuthModule + 业务模块
 ├── config/                       ★ 配置层，对外只有 index.ts 一个入口
 │   ├── env.ts                    变量名/默认值常量 + 类型转换 + 校验类 + validateEnv + 告警
-│   ├── app.config.ts             app namespace（env / port / host）
+│   ├── app.config.ts             app namespace（env / port / host / 两个契约开关）
 │   ├── swagger.config.ts         swagger namespace（复用 isSwaggerEnabled 的规则）
 │   ├── platform.config.ts        cors + throttle namespace（🅿️ 预留）
+│   ├── jwt.config.ts             jwt namespace（JWT_SECRET / JWT_EXPIRES_IN）
 │   ├── database.config.ts        database namespace（🅿️ 预留，含连接契约）
 │   ├── describe-config.ts        readResolvedConfig / formatConfigSummary / redactUrl
 │   ├── app-config.module.ts      AppConfigModule + env 文件选择
-│   └── __tests__/                config.e2e-spec.ts（校验规则 + namespace 默认值 + 脱敏）
+│   └── __tests__/                config.e2e-spec.ts（配置契约）+ jwt.config.spec.ts（JWT 配置单测）
+├── auth/                         ★ 认证层（JWT），对外只有 index.ts 一个入口
+│   ├── auth.module.ts            forRoot / forRootAsync（包 JwtModule）+ 全局 APP_GUARD
+│   ├── auth-options.ts           AuthOptions（就是 JwtModuleOptions）/ AuthAsyncOptions
+│   ├── auth.controller.ts        POST /auth/login（@Public）+ GET /auth/profile（受保护）
+│   ├── auth.service.ts           校验凭证 → 签发 JWT
+│   ├── users.service.ts          内存用户表（两个演示账号）+ 常量时间密码比较
+│   ├── jwt-auth.guard.ts         认证守卫（fail-closed，@Public() 白名单）
+│   ├── jwt-payload.ts            JwtPayload 类型 + isJwtPayload() + lifetimeSecondsOf()
+│   ├── decorators/               @Public() / @CurrentUser()
+│   ├── exceptions.ts             401（UNAUTHENTICATED + WWW-Authenticate）
+│   ├── dto/                      LoginDto / LoginResponseDto / ProfileDto
+│   └── __tests__/                单测（用户表 / 签发 / 守卫矩阵 / 载荷）+ auth.e2e-spec.ts
 ├── contract/                     ★ 可复用契约层，对外只有 index.ts 一个入口
 │   ├── index.ts                  门面桶（显式具名导出，不用 export *）
 │   ├── api-contract.module.ts    forRoot / forRootAsync / API_CONTRACT_OPTIONS + 请求 id 中间件
@@ -315,16 +348,16 @@ src/
 │   │   ├── validation-pipe.factory.ts      默认开关 + createValidationPipe()
 │   │   ├── contract-validation.pipe.ts     给每条明细补 errors[].location
 │   │   ├── validation-exception.factory.ts 校验错误 → { code, message, errors[] }
-│   │   ├── http-exception.filter.ts        失败响应统一形状（含数组型 message 规范化）
+│   │   ├── http-exception.filter.ts        失败响应统一形状（含数组型 message 规范化 + 异常响应头）
 │   │   ├── error-contract.ts               失败侧类型的本地别名（形状在共享包里）
 │   │   ├── error-code.ts                   ErrorCode 值对象 + 约束名→语义 code 映射
 │   │   ├── error-location.ts               location 的运行时校验
-│   │   ├── api-exception.ts                业务异常基类（code + message + status）
+│   │   ├── api-exception.ts                业务异常基类（code + message + status + headers?）
 │   │   ├── is-optional-not-null.decorator.ts  @IsOptionalNotNull()
 │   │   ├── raw-body.decorator.ts           @RawBody()
 │   │   └── is-not-reserved-name.validator.ts
 │   ├── observability/
-│   │   ├── request-context.ts              AsyncLocalStorage：getRequestId()
+│   │   ├── request-context.ts              AsyncLocalStorage：getRequestId() / setRequestUserId()
 │   │   └── request-id.middleware.ts        x-request-id 生成/沿用 + 幂等
 │   ├── response/
 │   │   ├── response-contract.ts            ENVELOPED / PAGINATED_RESULT 两个标记
@@ -340,16 +373,17 @@ src/
 │   ├── export-openapi.ts         pnpm openapi:export → openapi/openapi.json
 │   ├── is-swagger-enabled.ts     启停规则（纯函数，可单测）
 │   ├── envelope.schema.ts        响应信封在 OpenAPI 里的表示（唯一手写处 + e2e 双向守卫）
-│   └── api-errors.decorator.ts   @ApiEnvelopeErrors() / @ApiEnvelopeConflict()
+│   ├── api-errors.decorator.ts   @ApiEnvelopeErrors() / @ApiEnvelopeConflict() / @ApiEnvelopeAuthErrors()
+│   └── __tests__/                openapi.e2e-spec.ts（**整份文档**：路径清单 / 标签 / 悬空 $ref / 失败响应）
 └── modules/
-    └── validation-demo/          活文档：内存版 users 资源，把每种行为都跑一遍
+    └── validation-demo/          活文档：内存版 users 资源，把每种校验行为都跑一遍
         ├── validation-demo.controller.ts
         ├── validation-pipe-order.controller.ts
         ├── validation-demo.service.ts
         ├── user.dto.ts           响应模型 UserDto（= 原来的 User interface）
         ├── exceptions.ts         具名业务异常（继承 ApiException，code + 文案集中一处）
         ├── dto/
-        └── __tests__/            validation-demo.e2e-spec.ts（响应契约）+ swagger.e2e-spec.ts（文档）
+        └── __tests__/            validation-demo.e2e-spec.ts（响应契约）
 ```
 
 约定：
@@ -360,6 +394,10 @@ src/
   而 `Object` 在 `ValidationPipe` 的跳过名单里 —— 校验会**静默失效**（400 变 201，无任何报错）。详见 docs §8。
 - `src/contract/` 只管运行时行为；OpenAPI 投影一律放 `src/swagger/`，避免契约层被文档工具绑住。
 - **线上形状只在 `packages/api-contract` 定义一次**：`src/contract/` 转出类型、只放服务端运行时需要的东西。
+- **`config` / `contract` / `auth` 互不认识**：三者都只被 `app.module.ts` 的工厂函数粘起来，
+  所以每个都能单独 import 进测试模块（`src/auth/` 里没有一行 `@/config`）。
+- **测试按被测对象归属**：文档级不变量在 `src/swagger/__tests__/`，每个 demo 只测自己的行为 ——
+  加一个模块不必去改另一个模块的测试文件。
 
 ## 共享契约包（`packages/api-contract`）
 
@@ -405,7 +443,7 @@ import { ApiContractModule } from '@/contract';
 - 构建必须走 Nest CLI（`pnpm build` / `pnpm start:dev`）：Nest CLI 在 emit 前把别名重写成相对路径，
   所以 `dist` 里不会残留 `@/...`，`pnpm start:prod` 可直接跑。
 - 不要直接 `npx tsc -p tsconfig.build.json`：裸 `tsc` 不重写别名，`dist` 会在运行时报 `MODULE_NOT_FOUND`。
-- 测试由 `jest-e2e.json` 的 `moduleNameMapper` 解析同样的别名。
+- 测试由 `jest-e2e.json`（e2e）与 `jest.json`（单测）的 `moduleNameMapper` 解析同样的别名。
 
 ## 常用脚本
 
@@ -413,7 +451,9 @@ import { ApiContractModule } from '@/contract';
 pnpm start:dev        # 开发（watch）
 pnpm build            # 构建契约包 + 构建服务端（dist/main.js）
 pnpm lint             # eslint（type-aware）
-pnpm test:e2e         # 契约测试（响应形状 + OpenAPI 文档 + 配置校验）
+pnpm test             # 单元测试（判定逻辑 / 纯函数，jest.json）
+pnpm test:cov         # 单元测试 + 覆盖率
+pnpm test:e2e         # 契约测试（响应形状 + 认证 + OpenAPI 文档 + 配置校验）
 pnpm openapi:export   # 落盘 openapi/openapi.json
 pnpm build:contract   # 只构建 packages/api-contract（pnpm install 的 prepare 会跑它）
 ```
@@ -422,5 +462,7 @@ pnpm build:contract   # 只构建 packages/api-contract（pnpm install 的 prepa
 
 - [`docs/configuration.md`](docs/configuration.md)：环境变量契约、启动即校验规则、数据库配置的预留契约。
 - [`docs/validation.md`](docs/validation.md)：校验与响应契约的完整规则、实现依据、实测证据、有意没做的取舍。
+- [`docs/authentication.md`](docs/authentication.md)：**认证方案** —— JWT 登录（内存用户表）、守卫与白名单、`JWT_SECRET` 契约、安全边界、升级路径（bcrypt / refresh token / 角色权限）。
 - [`docs/review-backlog.md`](docs/review-backlog.md)：一次复盘（P0/P1 已修复，P2/P3 待办）+ 实测复现命令。
 - [`docs/nestjs-learning-plan.md`](docs/nestjs-learning-plan.md)：Nest 学习路线（本仓库按它逐步搭建）。
+- [`docs/learning-next.md`](docs/learning-next.md)：**下一步做什么** —— 按投入产出比重排的学习与实施清单（含实测缺口、验收命令、四个可独立合并的迭代）。

@@ -1,6 +1,8 @@
 import type { INestApplication } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { OpenAPIObject } from '@nestjs/swagger';
+import { LoginResponseDto } from '@/auth/dto/login-response.dto';
+import { ProfileDto } from '@/auth/dto/profile.dto';
 import {
   IdsDto,
   ReceivedCheckedBodyDto,
@@ -25,7 +27,7 @@ export const SWAGGER_JSON_PATH = 'docs-json';
  * 悬空引用（实测踩过：`data: { $ref: UserDto }` 而 `components.schemas.UserDto` 不存在）。
  *
  * ⚠️ 新增"响应模型"（不是请求 DTO）时要往这里加一条。
- * `swagger.e2e-spec.ts` 里有一条**通用守卫**：文档里出现的每个 `$ref` 都必须在
+ * `openapi.e2e-spec.ts` 里有一条**通用守卫**：文档里出现的每个 `$ref` 都必须在
  * `components.schemas` 里能找到，漏加会直接让测试红。
  */
 export const RESPONSE_MODELS = [
@@ -35,6 +37,8 @@ export const RESPONSE_MODELS = [
   ReceivedCheckedBodyDto,
   ReceivedRawBodyDto,
   ReceivedPlainBodyDto,
+  LoginResponseDto,
+  ProfileDto,
 ];
 
 export interface SetupSwaggerOptions {
@@ -48,7 +52,7 @@ export interface SetupSwaggerOptions {
  * **构造** OpenAPI 文档 —— 唯一一处文档配置。
  *
  * 单独导出（而不是塞在 `setupSwagger()` 里）是为了让测试用**同一个**函数：
- * 之前 `swagger.e2e-spec.ts` 自己又写了一遍 `DocumentBuilder`，
+ * 之前 `openapi.e2e-spec.ts` 自己又写了一遍 `DocumentBuilder`，
  * 于是入口改了 title / `extraModels` 而测试照样全绿 —— 测试就没在测入口。
  *
  * `extraModels` / 信封组件的注入理由见各自的注释。
@@ -78,6 +82,10 @@ export function buildDocument(
     .addTag(
       'validation-demo',
       '参数校验 / 响应契约的活文档（内存版 users 资源）',
+    )
+    .addTag(
+      'auth',
+      '认证：`POST /auth/login` 用内存用户表换 JWT，`GET /auth/profile` 需要 Bearer token',
     )
     .build();
 

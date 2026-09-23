@@ -38,6 +38,14 @@ export type ErrorCode =
   | 'USER_NOT_FOUND'
   /** 顶层：未捕获的内部错误（细节只进日志）。 */
   | 'INTERNAL_ERROR'
+  /**
+   * 顶层：**未认证**（HTTP 401）—— 缺凭证、头格式不对、凭证无效或已过期。
+   *
+   * 命名对齐 AIP-193 的 `UNAUTHENTICATED`（"你是谁"）。
+   * 本仓库当前只做到认证，没有授权层，所以没有 `PERMISSION_DENIED`（403）这个成员；
+   * 将来加角色/权限时再按同样的方式新增（`code` 可以新增、不能改名）。
+   */
+  | 'UNAUTHENTICATED'
   // ── 下面是**字段级** code（`errors[].code`），按校验语义划分 ──
   /** 必填但没有值（`@IsDefined` / `@IsNotEmpty`）。 */
   | 'REQUIRED'

@@ -1,6 +1,276 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/auth/login": {
+      "post": {
+        "description": "库里的演示账号：`neo` / `matrix`、`trinity` / `zion`。用户名去空格并转小写，**密码不做任何处理**（首尾空格是密码的一部分）。凭证不对时统一返回 401 与同一句文案 —— 不区分\"用户不存在\"和\"密码错\"，避免用户名枚举。",
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "登录成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ResponseEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/LoginResponseDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "入参校验失败（`errors[]` 里是字段级明细）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Bad Request",
+                    "message": "Request validation failed",
+                    "code": "VALIDATION_FAILED",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
+                    "errors": [
+                      {
+                        "field": "name",
+                        "location": "body",
+                        "code": "INVALID_LENGTH",
+                        "message": "name must be longer than or equal to 2 characters"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证：缺少凭证、`Authorization` 不是 Bearer、凭证无效或已过期（响应头带 `WWW-Authenticate`）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Unauthorized",
+                    "message": "Missing or malformed credentials",
+                    "code": "UNAUTHENTICATED",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源或路由不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Not Found",
+                    "message": "user 999999 not found",
+                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "未捕获的内部错误（细节只进日志，不进响应）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Internal Server Error",
+                    "message": "Internal server error",
+                    "code": "INTERNAL_ERROR",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "登录并签发 JWT",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/profile": {
+      "get": {
+        "description": "把 token 里的声明原样回显：`sub` + `username`。不含角色 / 权限 —— 本模块只回答\"你是谁\"，不回答\"你能不能\"。",
+        "operationId": "AuthController_profile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "token 有效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ResponseEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ProfileDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "入参校验失败（`errors[]` 里是字段级明细）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Bad Request",
+                    "message": "Request validation failed",
+                    "code": "VALIDATION_FAILED",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
+                    "errors": [
+                      {
+                        "field": "name",
+                        "location": "body",
+                        "code": "INVALID_LENGTH",
+                        "message": "name must be longer than or equal to 2 characters"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证：缺少凭证、`Authorization` 不是 Bearer、凭证无效或已过期（响应头带 `WWW-Authenticate`）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Unauthorized",
+                    "message": "Missing or malformed credentials",
+                    "code": "UNAUTHENTICATED",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源或路由不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Not Found",
+                    "message": "user 999999 not found",
+                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "未捕获的内部错误（细节只进日志，不进响应）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Internal Server Error",
+                    "message": "Internal server error",
+                    "code": "INTERNAL_ERROR",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "当前身份（需要 Bearer token）",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/validation-demo/users": {
       "post": {
         "operationId": "ValidationDemoController_create",
@@ -1405,6 +1675,10 @@
     {
       "name": "validation-demo",
       "description": "参数校验 / 响应契约的活文档（内存版 users 资源）"
+    },
+    {
+      "name": "auth",
+      "description": "认证：`POST /auth/login` 用内存用户表换 JWT，`GET /auth/profile` 需要 Bearer token"
     }
   ],
   "servers": [
@@ -1415,6 +1689,29 @@
   ],
   "components": {
     "schemas": {
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "description": "用户名（去首尾空格、大小写不敏感）",
+            "example": "neo"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 72,
+            "description": "密码（**不去空格**：首尾空格是密码的一部分）",
+            "example": "matrix"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      },
       "AddressDto": {
         "type": "object",
         "properties": {
@@ -1720,6 +2017,49 @@
           "received"
         ]
       },
+      "LoginResponseDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "访问令牌，后续用 `Authorization: Bearer <token>` 发送",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIn0.…"
+          },
+          "tokenType": {
+            "type": "string",
+            "description": "令牌类型，固定 `Bearer`",
+            "example": "Bearer"
+          },
+          "expiresIn": {
+            "type": "number",
+            "description": "有效期（秒），由 token 的 `exp - iat` 得出",
+            "example": 3600
+          }
+        },
+        "required": [
+          "accessToken",
+          "tokenType"
+        ]
+      },
+      "ProfileDto": {
+        "type": "object",
+        "properties": {
+          "sub": {
+            "type": "string",
+            "description": "主体 id（JWT 的 `sub`）",
+            "example": "1"
+          },
+          "username": {
+            "type": "string",
+            "description": "用户名",
+            "example": "neo"
+          }
+        },
+        "required": [
+          "sub",
+          "username"
+        ]
+      },
       "ResponseEnvelope": {
         "type": "object",
         "required": [
@@ -1791,6 +2131,7 @@
               "EMAIL_ALREADY_EXISTS",
               "USER_NOT_FOUND",
               "INTERNAL_ERROR",
+              "UNAUTHENTICATED",
               "REQUIRED",
               "INVALID_TYPE",
               "INVALID_FORMAT",
@@ -1853,6 +2194,7 @@
               "EMAIL_ALREADY_EXISTS",
               "USER_NOT_FOUND",
               "INTERNAL_ERROR",
+              "UNAUTHENTICATED",
               "REQUIRED",
               "INVALID_TYPE",
               "INVALID_FORMAT",

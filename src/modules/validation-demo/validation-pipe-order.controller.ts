@@ -9,6 +9,7 @@ import {
   UsePipes,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Public } from '@/auth';
 import { createValidationPipe } from '@/contract';
 import { ApiOkEnvelope } from '@/swagger/api-envelope.decorator';
 import { ApiCreatedEnvelope } from '@/swagger/api-envelope.decorator';
@@ -23,7 +24,11 @@ import { IdsDto, StrictProbeResultDto } from './dto/webhook-response.dto';
  * 所以全局管道**永远第一个跑**，局部管道只能看到它放行之后的值。
  *
  * 失败响应由类级 `@ApiEnvelopeErrors()` 统一声明（见 `validation-demo.controller.ts` 的注释）。
+ *
+ * 认证：与 `ValidationDemoController` 一样**整体 `@Public()`** —— 同属校验演练场，
+ * 公开是**显式声明**（全局认证守卫是 fail-closed 的，不写就会全部 401）。
  */
+@Public()
 @ApiTags('validation-demo')
 @ApiEnvelopeErrors()
 @Controller('validation-demo/pipe-order')

@@ -63,17 +63,22 @@ src/modules/validation-demo/               内存版 users 资源，无数据库
 ├── user.dto.ts                            响应模型 UserDto（= 原来的 User interface）
 ├── exceptions.ts                          具名业务异常（继承 ApiException）
 ├── dto/                                   user-role / address / create-user / update-user / query-users / user-id-param / webhook / plain-webhook / webhook-response
-└── __tests__/                             validation-demo.e2e-spec.ts（契约）+ swagger.e2e-spec.ts（文档）
+└── __tests__/                             validation-demo.e2e-spec.ts（响应契约；文档测试已移到 src/swagger/__tests__/）
 ```
 
 约定：
 
 - **`src/contract/` 内部互相引用走具体文件**（`api-contract.module.ts` 里写 `./validation/validation-pipe.factory`），**绝不走桶** —— 这样桶永远不参与循环依赖。
 - 消费方走门面：`import { ApiContractModule, RawBody } from '@/contract'`。
-- **模块内不再下沉 spec**：整个仓库有三个测试文件 ——
-  `validation-demo.e2e-spec.ts` 钉响应契约的形状（键集 / 状态码 / code / location / traceId），
-  `swagger.e2e-spec.ts` 钉 OpenAPI 文档（路由覆盖、信封 schema、插件推导、与运行时错误明细的一致性），
-  `src/config/__tests__/config.e2e-spec.ts` 钉环境变量契约（校验规则、默认值、脱敏）。
+- **测试按被测对象归属**（每个模块只对自己的行为负责，加一个模块不必改另一个的测试文件）：
+
+  | 文件 | 钉住什么 |
+  | --- | --- |
+  | `src/modules/validation-demo/__tests__/validation-demo.e2e-spec.ts` | 响应契约的形状（键集 / 状态码 / code / location / traceId） |
+  | `src/swagger/__tests__/openapi.e2e-spec.ts` | **整份** OpenAPI 文档（路由清单、标签、悬空 `$ref`、信封 schema、插件推导、每条路由的失败响应） |
+  | `src/auth/__tests__/auth.e2e-spec.ts` | 认证的运行时行为（登录 → token → 受保护路由；401 / `WWW-Authenticate` / `traceId`） |
+  | `src/config/__tests__/config.e2e-spec.ts` | 环境变量契约（校验规则、默认值、脱敏、启动摘要） |
+  | `src/**/__tests__/*.spec.ts` | 纯函数与判定逻辑的单测（`jest.json` 那条道） |
 
 `main.ts` 里**没有** `app.useGlobalPipes(...)` / `app.useGlobalFilters(...)` / `app.useGlobalInterceptors(...)`。
 
@@ -205,7 +210,7 @@ pnpm test:e2e:watch  # 同上，--watch
 `testRegex` 是对**完整路径**匹配的，所以测试文件放进 `__tests__/` 不影响发现，也不用改配置。
 
 两个 e2e 文件分工：`validation-demo.e2e-spec.ts` 钉响应契约（成功/失败信封的**键集**与状态码），
-`swagger.e2e-spec.ts` 钉 OpenAPI 文档（路由覆盖、信封 schema、插件推导出的约束、`/docs` 的启停）。
+`openapi.e2e-spec.ts` 钉 OpenAPI 文档（路由覆盖、信封 schema、插件推导出的约束、`/docs` 的启停）。
 
 ## 4. 四条必须记住的结论
 
@@ -733,7 +738,7 @@ legacy() { return { old: 'shape' }; }   // HTTP 200 {"old":"shape"} —— 没�
 | `api-envelope.decorator.ts` | `@ApiOkEnvelope(dto, '…')` / `@ApiCreatedEnvelope(dto, '…')` —— 成功响应一行 |
 | `api-errors.decorator.ts` | `@ApiEnvelopeErrors()`（类级挂 400/404/500）、`@ApiEnvelopeConflict()`（方法级挂 409） |
 
-**双向守卫**（`swagger.e2e-spec.ts`）：拿一条真实的校验失败响应，逐条比对
+**双向守卫**（`openapi.e2e-spec.ts`）：拿一条真实的校验失败响应，逐条比对
 `ERROR_DETAIL_SCHEMA.properties` —— 运行时多出 schema 没声明的键、或 schema 的 `required`
 在运行时缺席，都会红。这是"契约层不能依赖 Swagger、结构只能手写"的等价安全网。
 
@@ -757,7 +762,7 @@ create(@Body() dto: CreateUserDto) { return this.users.create(dto); }
    抄的示例既占地方，又会在字段改名后漂移（本次重构就是把这些删掉：`validation-demo.controller.ts` 235 → 151 行）；
 3. **class-validator 与注释自动变 schema**（CLI 插件），所以没有 `@ApiQuery` / `@ApiBody`。
 
-### 五个实测出来的关键点（都钉在 `swagger.e2e-spec.ts` 里）
+### 五个实测出来的关键点（都钉在 `openapi.e2e-spec.ts` 里）
 
 1. **`$ref` 不会自动生成组件**：`SwaggerModule.createDocument()` 只为它**探测到的模型类**建
    `components.schemas`。所以：
@@ -803,7 +808,7 @@ create(@Body() dto: CreateUserDto) { return this.users.create(dto); }
   （`Object.values(ErrorCode)` / `ERROR_LOCATIONS`），结构则由 §9.7 开头那条**双向守卫**钉住。
 
 **单一构建入口**：`buildDocument(app)` 是唯一一处 `DocumentBuilder` / `extraModels` / 信封组件注入。
-`setupSwagger()` 和 `swagger.e2e-spec.ts` 都调它 —— 以前测试里自己又拼了一份，
+`setupSwagger()` 和 `openapi.e2e-spec.ts` 都调它 —— 以前测试里自己又拼了一份，
 于是入口改了 title 或 `extraModels` 而测试照样全绿（那种测试等于没测）。
 
 **落盘产物**：`pnpm openapi:export` 用同一个 `buildDocument()` 写出 `openapi/openapi.json`，
@@ -817,8 +822,21 @@ create(@Body() dto: CreateUserDto) { return this.users.create(dto); }
 
 | 层 | 取值 | 例子 |
 | --- | --- | --- |
-| 顶层 `code` | 业务语义 | `VALIDATION_FAILED` / `EMAIL_ALREADY_EXISTS` / `USER_NOT_FOUND` / `INTERNAL_ERROR` |
+| 顶层 `code` | 业务语义 | `VALIDATION_FAILED` / `EMAIL_ALREADY_EXISTS` / `USER_NOT_FOUND` / `UNAUTHENTICATED` / `INTERNAL_ERROR` |
 | 字段级 `errors[].code` | **校验语义** | `REQUIRED` / `INVALID_TYPE` / `INVALID_FORMAT` / `INVALID_LENGTH` / `OUT_OF_RANGE` / `NOT_ALLOWED_VALUE` / `RESERVED_NAME` / `TOO_MANY_ITEMS` / `UNKNOWN_FIELD` / `UNKNOWN_CONSTRAINT` |
+
+与认证相关的顶层 code 只有 `UNAUTHENTICATED`（401），命名对齐
+[AIP-193](https://google.aip.dev/193)。**本仓库只做认证、没有授权层**，
+所以没有 403 / `PERMISSION_DENIED`：
+
+| 语义 | 状态码 | code | 谁抛 | `WWW-Authenticate` |
+| --- | --- | --- | --- | --- |
+| 没带凭证 / 格式不对 | 401 | `UNAUTHENTICATED` | `JwtAuthGuard` | ✅ `error="invalid_request"` |
+| 凭证无效 / 已过期 | 401 | `UNAUTHENTICATED` | 同上 | ✅ `error="invalid_token"` |
+| 登录时凭证不对 | 401 | `UNAUTHENTICATED` | `AuthService`（`InvalidCredentialsException`） | ❌ 刻意不带（那是"访问受保护资源"的语义） |
+
+这些失败都**不**带 `errors[]`（粒度是整个请求，没有字段级明细可给）。
+完整方案见 [`docs/authentication.md`](authentication.md)。
 
 字段级 code 刻意**不用** class-validator 的约束名（`isInt` / `min` / `matches`）：
 那是库的实现细节，换到 Zod 就全变了。中间隔一张 `VALIDATION_CONSTRAINT_CODES` 映射表，

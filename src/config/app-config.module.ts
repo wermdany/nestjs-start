@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { appConfig } from './app.config';
+import { jwtConfig } from './jwt.config';
 import { databaseConfig } from './database.config';
 import { DEFAULT_NODE_ENV, isNodeEnv } from './env';
 import { corsConfig, throttleConfig } from './platform.config';
@@ -37,7 +38,7 @@ export function shouldIgnoreEnvFile(env: EnvSource = process.env): boolean {
 }
 
 /**
- * 配置模块。根模块 `imports: [AppConfigModule]` 一行接入，五个 namespace 全局可用：
+ * 配置模块。根模块 `imports: [AppConfigModule]` 一行接入，六个 namespace 全局可用：
  *
  * ```ts
  * const app = config.getOrThrow<AppConfig>('app');
@@ -74,6 +75,7 @@ export function shouldIgnoreEnvFile(env: EnvSource = process.env): boolean {
         swaggerConfig,
         corsConfig,
         throttleConfig,
+        jwtConfig,
         databaseConfig,
       ],
     }),

@@ -14,7 +14,7 @@ import { ERROR_LOCATIONS, ErrorCode } from '@/contract';
  * （前后端共享、无任何依赖）。所以 OpenAPI 这边只有两条路：
  *
  * - 在契约层挂 `@ApiProperty` 让插件生成 ⇒ 共享包被文档工具绑住（否决）；
- * - **手写 schema + 一条一致性守卫**（现在这条）⇒ `swagger.e2e-spec.ts` 里有一条
+ * - **手写 schema + 一条一致性守卫**（现在这条）⇒ `openapi.e2e-spec.ts` 里有一条
  *   "schema 属性 ↔ 运行时 `errors[]` 键集"的双向断言，改了一边不改另一边就红。
  *
  * `code` / `location` 的**取值**仍然来自契约层（`ErrorCode` / `ERROR_LOCATIONS`），
@@ -86,7 +86,7 @@ export const ERROR_ENVELOPE_SCHEMA: SchemaObject = {
  *
  * 与 `@nest-start/api-contract` 的 `ErrorDetail` 是"同源但不同形态"：
  * 那边是运行时用的 TypeScript 类型，这边是 OpenAPI schema。
- * `swagger.e2e-spec.ts` 的守卫会拿真实的校验失败响应来比对这个结构。
+ * `openapi.e2e-spec.ts` 的守卫会拿真实的校验失败响应来比对这个结构。
  */
 export const ERROR_DETAIL_SCHEMA: SchemaObject = {
   type: 'object',
@@ -168,6 +168,20 @@ export const CONFLICT_EXAMPLE = {
   error: 'Conflict',
   message: 'email neo@example.com already exists',
   code: ErrorCode.EMAIL_ALREADY_EXISTS,
+  traceId: '3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f',
+};
+
+/**
+ * 401 的示例。注意它**没有** `errors` 键：认证失败的粒度是"整个请求"，
+ * 没有字段级明细可给（这也是前端键集断言会钉住的形状）。
+ *
+ * `WWW-Authenticate` 响应头不出现在 body 示例里 —— 头属于 HTTP 层。
+ */
+export const UNAUTHENTICATED_EXAMPLE = {
+  success: false,
+  error: 'Unauthorized',
+  message: 'Missing or malformed credentials',
+  code: ErrorCode.UNAUTHENTICATED,
   traceId: '3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f',
 };
 

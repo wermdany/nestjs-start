@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  Matches,
   Max,
   Min,
   validateSync,
@@ -91,6 +92,26 @@ export const DEFAULT_THROTTLE_TTL_SECONDS = 60;
 export const DEFAULT_THROTTLE_LIMIT = 100;
 
 export const DEFAULT_SWAGGER_SERVER_URL = 'http://localhost:3000';
+
+// ── 认证：JWT ─────────────────────────────────────────────────────────────────
+
+/**
+ * JWT 签名密钥的**开发默认值**。
+ *
+ * ⚠️ 它写在这个文件里，等于公开：任何生产环境用它签名都等于**没有签名**。
+ * 所以 `findCrossFieldProblems()` 里有一条硬规则 —— `NODE_ENV=production` 时
+ * 要么显式配 `JWT_SECRET`，要么进程拒绝启动。
+ */
+export const DEFAULT_JWT_SECRET = 'dev-only-insecure-jwt-secret-change-me';
+
+/** 默认有效期。语法同 `jsonwebtoken` 的 `expiresIn`：`15m` / `1h` / `7d`。 */
+export const DEFAULT_JWT_EXPIRES_IN = '1h';
+
+/** 密钥长度的**告警**阈值（不是校验下限）：太短的 HMAC 密钥可被暴力猜。 */
+export const JWT_SECRET_MIN_WARN_LENGTH = 32;
+
+/** `expiresIn` 接受的格式：数字 + 单位（只放开最常见的四种，避免"看着像其实不生效"）。 */
+export const JWT_EXPIRES_IN_PATTERN = /^\d+[smhd]$/;
 
 // ── 类型判断与强制转换（env 里一切都是字符串） ────────────────────────────────
 
@@ -286,6 +307,22 @@ class EnvironmentVariables {
   @Min(1, { message: 'THROTTLE_LIMIT 必须是大于 0 的整数' })
   THROTTLE_LIMIT?: number;
 
+  /**
+   * JWT 签名密钥。**不设**时用 `DEFAULT_JWT_SECRET`（仅开发；生产环境会拒绝启动），
+   * 所以这里只校验"是个字符串"。
+   */
+  @IsOptional()
+  @IsString({ message: 'JWT_SECRET 必须是字符串' })
+  JWT_SECRET?: string;
+
+  /** JWT 有效期：数字 + 单位（`15m` / `1h` / `7d`）。 */
+  @IsOptional()
+  @Matches(JWT_EXPIRES_IN_PATTERN, {
+    message:
+      'JWT_EXPIRES_IN 必须是 <数字><单位> 形式，单位只能是 s / m / h / d（例如 15m、1h、7d）',
+  })
+  JWT_EXPIRES_IN?: string;
+
   @IsOptional()
   @IsIn([...DATABASE_DRIVERS], {
     message: `DATABASE_DRIVER 只能是 ${DATABASE_DRIVERS.join(' / ')} 之一`,
@@ -444,6 +481,21 @@ function findCrossFieldProblems(raw: EnvSource): string[] {
     );
   }
 
+  // JWT：生产环境不允许"没配密钥"或"用那个公开的开发默认值"——两者都等于假签名。
+  const jwtSecret = toOptionalString(raw.JWT_SECRET);
+
+  if (nodeEnv === 'production') {
+    if (jwtSecret === undefined) {
+      problems.push(
+        `生产环境必须显式配置 JWT_SECRET：默认值 "${DEFAULT_JWT_SECRET}" 是公开的，用它签名等于没有签名`,
+      );
+    } else if (jwtSecret === DEFAULT_JWT_SECRET) {
+      problems.push(
+        '生产环境不能使用内置的 DEFAULT_JWT_SECRET：它在源码里公开可见，请换成高熵随机串',
+      );
+    }
+  }
+
   return problems;
 }
 
@@ -484,6 +536,27 @@ export function configWarnings(raw: EnvSource): string[] {
   ) {
     warnings.push(
       `配置了 DATABASE_PASSWORD，但 DATABASE_DRIVER=${DEFAULT_DATABASE_DRIVER}：该配置目前不会生效`,
+    );
+  }
+
+  // JWT：开发环境用内置默认密钥是常态，但说清楚风险（生产环境已经在上面拦掉了）。
+  const jwtSecret = toOptionalString(raw.JWT_SECRET);
+
+  if (
+    nodeEnv !== 'production' &&
+    (jwtSecret === undefined || jwtSecret === DEFAULT_JWT_SECRET)
+  ) {
+    warnings.push(
+      '正在使用内置的开发默认 JWT_SECRET：任何人都能用它伪造 token（生产环境会直接拒绝启动，用 JWT_SECRET=<高熵随机串> 配置）',
+    );
+  }
+
+  if (
+    jwtSecret !== undefined &&
+    jwtSecret.length < JWT_SECRET_MIN_WARN_LENGTH
+  ) {
+    warnings.push(
+      `JWT_SECRET 短于 ${JWT_SECRET_MIN_WARN_LENGTH} 个字符：HMAC 密钥太短容易被暴力猜，建议换成高熵随机串`,
     );
   }
 

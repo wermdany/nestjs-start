@@ -8,6 +8,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { Public } from '@/auth';
 import { RawBody } from '@/contract';
 import {
   ApiCreatedEnvelope,
@@ -45,7 +46,16 @@ import { ValidationDemoService } from './validation-demo.service';
  *
  * 一个必须知道的边界：方法级 `@ApiResponse` 一旦存在，`@nestjs/swagger` 就**不再合并类级失败响应**。
  * 所以别把 400 之类也写到方法上，否则那条路由会丢掉类级的全部失败响应。
+ *
+ * 认证：本控制器**整体 `@Public()`** —— 它是参数校验 / 响应契约的演练场，
+ * 演示的是"入参怎么被校验、失败长什么样"，加一层认证只会挡住读者。
+ *
+ * ⚠️ 公开是**显式声明**，不是默认：全局认证守卫（`AuthModule` 的 `JwtAuthGuard`）
+ * 是 fail-closed 的，不写这一行的话所有路由都会 401。需要认证的路由请放在别的控制器里
+ * （见 `src/auth/auth.controller.ts` 的 `/auth/profile`），**不要**在这里去掉 `@Public()`
+ * 再逐条加凭证 —— 那会让这个 demo 的用途变得含糊。
  */
+@Public()
 @ApiTags('validation-demo')
 @ApiEnvelopeErrors()
 @Controller('validation-demo')

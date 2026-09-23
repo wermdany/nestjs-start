@@ -5,6 +5,10 @@
 > **建议周期**：4 周，每周 5–8 小时。
 >
 > ⚠️ 官方文档链接以站点侧边栏为准；若某个 slug 有调整，按章节名在侧边栏里找同名条目即可。
+>
+> 📌 **动手前先读 [`learning-next.md`](learning-next.md)**：本仓库已经把 §2.5 / §2.6 / §2.8 /
+> §3.1–3.3 / §5.1 / §5.2 / §5.5 / §5.6 做成了生产级实现，那几章的正确用法是**读代码 + 答自测题**，
+> 照下面的练习重做是降级。那份文件按投入产出比重排了真正还没做的事，并给出验收命令。
 
 ---
 
@@ -386,13 +390,24 @@ npx nest g service cats --flat --no-spec   # 不建目录、不生成 .spec.ts
 
 **🔍 本仓库对照**
 
-- 目前没有 guard；`src/app.controller.ts` 的所有路由**完全公开**。
-- `main.ts` 里 `app.listen()` 之前可放 `useGlobalGuards()`。
+- **已经实现了**：`src/auth/`（JWT 登录 + 全局 `JwtAuthGuard` + `@Public()` / `@CurrentUser()`）。
+  完整说明见 [`docs/authentication.md`](authentication.md) —— 这一章的练习可以改成
+  **读实现 + 补自测题**：
+  - 守卫为什么是**全局 + fail-closed**，而不是逐条路由 `@UseGuards`？
+  - `@Public()` 是怎么被守卫读到的？（`Reflector.getAllAndOverride` 与方法级优先）
+  - 为什么守卫只验签、不查库？代价是什么？（用户被禁用后 token 仍有效到过期）
+  - 401 的两种原因（`invalid_request` / `invalid_token`）为什么要分开？
+- **本章的练习仍然值得做**：仓库里**没有**授权层（角色 / 权限），所以"写一个 `RolesGuard`
+  + `@Roles()`"是一个真实的扩展练习 —— 触发条件与改动范围见 `docs/authentication.md` §10。
+- `main.ts` 里**没有** `useGlobalGuards()`：守卫走 `AuthModule` 的 `APP_GUARD`。
 
 **🛠 练习任务**
 
-- [ ] 写 `AuthGuard implements CanActivate`，检查请求头 `authorization === 'Bearer secret'`，不满足时 throw `UnauthorizedException`；加到 `GET /` 上验证。
-- [ ] 改成返回 `false`，对比 401 与 403 的响应差异，想清楚各自的语义。
+- [ ] 读 `src/auth/roles.guard.ts` 与 `src/auth/__tests__/roles.guard.spec.ts`，把判定矩阵抄成一张表
+      （元数据有无 × 主体有无 × 角色是否命中 → 结果）。
+- [ ] 写一个**自己的** `AuthGuard implements CanActivate`，检查请求头 `authorization === 'Bearer secret'`，
+      不满足时 throw `UnauthorizedException`；加到一条演示路由上验证。
+- [ ] 改成返回 `false`，对比 401 与 403 的响应**形状差异**，想清楚为什么本仓库坚持"抛异常而不是返回 false"。
 - [ ] 用 `@SetMetadata('roles', ['admin'])` + `Reflector` 写 `RolesGuard`：请求头 `x-role` 不在允许列表就拒绝。
 - [ ] 在 `AppController` 上放 `@UseGuards(RolesGuard)`，确认控制器级对**所有方法**生效。
 - [ ] 用 `{ provide: APP_GUARD, useClass: AuthGuard }` 全局注册，再给某个路由加 `@Public()` 自定义装饰器（用 `Reflector` 读）来放行 —— 这就是真实项目里「全局鉴权 + 白名单」的标准做法。
@@ -468,8 +483,10 @@ npx nest g service cats --flat --no-spec   # 不建目录、不生成 .spec.ts
 
 **🔍 本仓库对照**
 
-- 只有内置装饰器：`@Controller()`、`@Get()`、`@Query()`、`@Injectable()`、`@Module()`。
-- `src/app.controller.ts` 里 `@Query() query` 正是「参数装饰器」的位置，换成你自己的 `@Name()` 就能体会。
+- 契约层里已经有一批自定义装饰器：`@RawBody()`、`@NoEnvelope()`、`@IsOptionalNotNull()`
+  （`src/contract/`），以及认证层的 `@Public()` / `@CurrentUser()`（`src/auth/decorators/`）。
+- 其中 `@CurrentUser()` 是 `createParamDecorator` 的现成范例，`@Public()` 是 `SetMetadata` 的；
+  `applyDecorators` 的用法见 `@ApiEnvelopeErrors()`（`src/swagger/api-errors.decorator.ts`）。
 
 **🛠 练习任务**
 

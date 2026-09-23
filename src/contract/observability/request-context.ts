@@ -1,11 +1,16 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 /**
- * 一次请求的上下文。目前只有请求 id，但这是"能在任意一层拿到请求级信息"的入口 ——
- * 以后要加 `userId` / trace 采样标记，只在这里扩字段。
+ * 一次请求的上下文。这是"能在任意一层拿到请求级信息"的入口。
  */
 export interface RequestContext {
   requestId: string;
+  /**
+   * 已认证主体的 id（JWT 的 `sub`），认证成功后由 `JwtAuthGuard` 写入。
+   *
+   * 未认证的请求、以及 `@Public()` 路由上不会有这个字段 —— 读它的代码要处理 `undefined`。
+   */
+  userId?: string;
 }
 
 const storage = new AsyncLocalStorage<RequestContext>();
@@ -32,4 +37,21 @@ export function getRequestContext(): RequestContext | undefined {
 /** 取当前请求 id；不在请求里返回 `undefined`。 */
 export function getRequestId(): string | undefined {
   return storage.getStore()?.requestId;
+}
+
+/**
+ * 把已认证主体的 id 写进**当前**请求上下文（`JwtAuthGuard` 认证成功后调用一次）。
+ *
+ * 为什么是"就地改 store"而不是重新 `run()`：`AsyncLocalStorage` 的 store 是中间件
+ * 创建后传下来的普通对象，在同一个异步上下文里改它等于"补一个字段"，下游立刻可见；
+ * 重新 `run()` 只会造出一个下游拿不到的新作用域。
+ *
+ * 不在请求里调用（单测、启动阶段）是**无操作**，不抛错 —— 认证不该因为观测设施而失败。
+ */
+export function setRequestUserId(userId: string): void {
+  const store = storage.getStore();
+
+  if (store) {
+    store.userId = userId;
+  }
 }

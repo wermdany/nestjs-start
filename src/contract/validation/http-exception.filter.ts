@@ -7,6 +7,7 @@ import {
   type ExceptionFilter,
 } from '@nestjs/common';
 import { STATUS_CODES } from 'node:http';
+import { ApiException } from './api-exception';
 import type { ApiErrorBody, ErrorDetail } from './error-contract';
 import { ErrorCode, isErrorCode } from './error-code';
 import { isErrorLocation } from './error-location';
@@ -51,6 +52,7 @@ export class AppExceptionFilter implements ExceptionFilter {
       status: (code: number) => {
         json: (body: ApiErrorBody) => void;
       };
+      setHeader: (name: string, value: string) => void;
       headersSent?: boolean;
     }>();
 
@@ -67,7 +69,36 @@ export class AppExceptionFilter implements ExceptionFilter {
 
     const { statusCode, body } = this.toApiErrorBody(exception, host);
 
+    // 异常自带的响应头（目前只有 401 的 `WWW-Authenticate`）必须在 `json()` **之前**写：
+    // 响应一旦发出去，`setHeader` 只会抛 `ERR_HTTP_HEADERS_SENT`。
+    for (const [name, value] of Object.entries(
+      this.headersOf(exception) ?? {},
+    )) {
+      response.setHeader(name, value);
+    }
+
     response.status(statusCode).json(body);
+  }
+
+  /**
+   * 取异常上要额外写出的响应头。只有 {@link ApiException} 携带这个能力 ——
+   * 框架内建异常（`NotFoundException` 等）没有，也不该被硬塞。
+   *
+   * 空名 / 非字符串 / 空串一律丢弃：响应头是跨信任边界的输出，宁可少写不可写坏。
+   */
+  private headersOf(
+    exception: unknown,
+  ): Readonly<Record<string, string>> | undefined {
+    if (!(exception instanceof ApiException) || !exception.headers) {
+      return undefined;
+    }
+
+    const entries = Object.entries(exception.headers).filter(
+      ([name, value]) =>
+        name.length > 0 && typeof value === 'string' && value.trim().length > 0,
+    );
+
+    return entries.length > 0 ? Object.fromEntries(entries) : undefined;
   }
 
   private toApiErrorBody(

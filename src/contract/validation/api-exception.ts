@@ -21,10 +21,22 @@ import type { ErrorCode } from './error-code';
  * 与 `docs/validation.md` §9.2 的分工一致。
  */
 export class ApiException extends HttpException {
+  /**
+   * 需要额外写出的**响应头**（可选），目前只有一个消费者：401 的 `WWW-Authenticate`。
+   *
+   * 为什么头要挂在异常上：`HttpExceptionOptions` 只有 `cause` / `description`
+   * （见 `@nestjs/common` 的 `http.exception.d.ts`），框架**没有**"由异常设置响应头"
+   * 的入口。而 RFC 6750 要求 401 带 `WWW-Authenticate`，否则客户端不知道该怎么带凭证；
+   * 由 `AppExceptionFilter` 统一写出是唯一不改契约形状的做法
+   * （头属于 HTTP 层，body 里不重复表达）。
+   *
+   * ⚠️ 头与响应体一样是对外可见的：**不要**放凭证、内部路径或策略细节。
+   */
   constructor(
     readonly code: ErrorCode,
     message: string,
     status: HttpStatus,
+    readonly headers?: Readonly<Record<string, string>>,
   ) {
     super({ code, message }, status);
   }

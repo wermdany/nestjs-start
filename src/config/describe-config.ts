@@ -1,11 +1,13 @@
 import type { ConfigService } from '@nestjs/config';
 import type { AppConfig } from './app.config';
+import { DEFAULT_JWT_SECRET } from './env';
+import type { JwtConfig } from './jwt.config';
 import type { DatabaseConfig } from './database.config';
 import type { CorsConfig, ThrottleConfig } from './platform.config';
 import type { SwaggerConfig } from './swagger.config';
 
 /**
- * 一次把五个 namespace 读出来（`main.ts` 用它做启动日志与接线）。
+ * 一次把六个 namespace 读出来（`main.ts` 用它做启动日志与接线）。
  *
  * 每个 namespace 的接口都是**手写**的，而不是靠 `ConfigService` 的 `infer: true` 推导 ——
  * 这样类型与测试断言的是同一份定义，也不依赖 `ConfigService` 的泛型魔法。
@@ -15,6 +17,7 @@ export interface ResolvedConfig {
   swagger: SwaggerConfig;
   cors: CorsConfig;
   throttle: ThrottleConfig;
+  jwt: JwtConfig;
   database: DatabaseConfig;
 }
 
@@ -36,6 +39,7 @@ export function readResolvedConfig(config: ConfigService): ResolvedConfig {
     swagger: config.getOrThrow<SwaggerConfig>('swagger'),
     cors: config.getOrThrow<CorsConfig>('cors'),
     throttle: config.getOrThrow<ThrottleConfig>('throttle'),
+    jwt: config.getOrThrow<JwtConfig>('jwt'),
     database: config.getOrThrow<DatabaseConfig>('database'),
   };
 }
@@ -66,6 +70,17 @@ export function redactUrl(raw: string): string {
   }
 }
 
+/**
+ * 认证配置的摘要：只说明密钥是**已配置**还是**内置默认值**，以及有效期 ——
+ * **绝不输出密钥本身**（它会进启动日志、CI 输出与工单截图）。
+ */
+function describeJwt(jwt: JwtConfig): string {
+  const secret =
+    jwt.secret === DEFAULT_JWT_SECRET ? 'secret:(默认)' : 'secret:(已配置)';
+
+  return `expires:${jwt.expiresIn},${secret}`;
+}
+
 /** 数据库目标的脱敏描述：`postgres@localhost:5432/appdb` / `memory`。 */
 function describeDatabase(database: DatabaseConfig): string {
   if (database.driver === 'memory') {
@@ -83,11 +98,12 @@ function describeDatabase(database: DatabaseConfig): string {
 }
 
 /**
- * 一行启动摘要。**绝不包含密码**（`describeDatabase` 只输出脱敏后的连接串）。
+ * 一行启动摘要。**绝不包含密码，也绝不包含 JWT 密钥**（`describeDatabase` 只输出脱敏后的
+ * 连接串，`describeJwt` 只输出"默认/已配置"与有效期）。
  *
  * ```
  * env=development port=3000 host=(默认: 全部网卡) swagger=on(http://localhost:3000)
- *   cors=*(预留) throttle=60s/100(预留) db=memory(预留)
+ *   jwt=expires:1h,secret:(默认) cors=*(预留) throttle=60s/100(预留) db=memory(预留)
  * ```
  */
 export function formatConfigSummary(resolved: ResolvedConfig): string {
@@ -104,6 +120,7 @@ export function formatConfigSummary(resolved: ResolvedConfig): string {
     `swagger=${
       resolved.swagger.enabled ? `on(${resolved.swagger.serverUrl})` : 'off'
     }`,
+    `jwt=${describeJwt(resolved.jwt)}`,
     withReservationMark('cors', `cors=${resolved.cors.origins.join(',')}`),
     withReservationMark(
       'throttle',

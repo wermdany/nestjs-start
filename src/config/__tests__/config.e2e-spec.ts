@@ -9,6 +9,7 @@ import {
   EnvValidationError,
   formatConfigSummary,
   readAppConfig,
+  readJwtConfig,
   readCorsConfig,
   readDatabaseConfig,
   readResolvedConfig,
@@ -203,13 +204,23 @@ describe('configWarnings（只告警不拦截）', () => {
       configWarnings({ DATABASE_PASSWORD: 'secret' }).join('\n'),
     ).toContain('DATABASE_PASSWORD');
 
+    // driver 不是 memory 时**不该**有这条"死配置"告警。
+    // 这里只断言与数据库相关的那部分 —— 告警清单里还有别的 namespace 的条目
+    // （例如"在用 JWT 的开发默认密钥"），用整表长度断言会让无关改动弄红这条用例。
     expect(
-      configWarnings({ ...POSTGRES_ENV, DATABASE_PASSWORD: 'secret' }),
-    ).toHaveLength(0);
+      configWarnings({ ...POSTGRES_ENV, DATABASE_PASSWORD: 'secret' }).join(
+        '\n',
+      ),
+    ).not.toContain('DATABASE_PASSWORD');
   });
 
-  it('开发环境什么都不设 → 没有告警', () => {
-    expect(configWarnings(EMPTY_ENV)).toEqual([]);
+  it('开发环境什么都不设 → 只有"JWT 用内置默认密钥"这一条告警', () => {
+    const warnings = configWarnings(EMPTY_ENV);
+
+    // "什么都不设"如今意味着"JWT 用源码里那个公开的默认密钥"—— 这值得一条告警，
+    // 但不拦启动（生产环境会在 validateEnv 里被拒绝，见 jwt.config.spec.ts）。
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('JWT_SECRET');
   });
 });
 
@@ -368,12 +379,17 @@ describe('redactUrl / 启动摘要', () => {
     expect(redactUrl('not a url at all')).toBe('not a url at all');
   });
 
-  it('启动摘要**绝不包含密码**', () => {
+  it('启动摘要**绝不包含密码与 JWT 密钥**', () => {
     const summary = formatConfigSummary({
       app: readAppConfig(EMPTY_ENV),
       swagger: readSwaggerConfig(EMPTY_ENV),
       cors: readCorsConfig(EMPTY_ENV),
       throttle: readThrottleConfig(EMPTY_ENV),
+      jwt: readJwtConfig({
+        ...EMPTY_ENV,
+        JWT_SECRET: 'super-secret-value-must-never-be-printed',
+        JWT_EXPIRES_IN: '15m',
+      }),
       database: readDatabaseConfig({
         ...POSTGRES_ENV,
         DATABASE_PASSWORD: 's3cret',
@@ -382,8 +398,11 @@ describe('redactUrl / 启动摘要', () => {
     });
 
     expect(summary).not.toContain('s3cret');
+    expect(summary).not.toContain('super-secret-value-must-never-be-printed');
     expect(summary).toContain('postgres@');
     expect(summary).toContain('port=3000');
+    // 密钥只以「默认 / 已配置」出现，另带有效期
+    expect(summary).toContain('jwt=expires:15m,secret:(已配置)');
   });
 
   it('还没有消费者的 namespace 被标成 (预留)', () => {
@@ -392,6 +411,7 @@ describe('redactUrl / 启动摘要', () => {
       swagger: readSwaggerConfig(EMPTY_ENV),
       cors: readCorsConfig(EMPTY_ENV),
       throttle: readThrottleConfig(EMPTY_ENV),
+      jwt: readJwtConfig(EMPTY_ENV),
       database: readDatabaseConfig(EMPTY_ENV),
     });
 
@@ -401,6 +421,8 @@ describe('redactUrl / 启动摘要', () => {
     // 已经接线的两项**不带**预留标记
     expect(summary).toContain('port=3000 ');
     expect(summary).toContain('swagger=on(http://localhost:3000)');
+    // 认证也已经有消费者（AuthModule），所以既不预留；密钥是内置默认值时摘要里会写明
+    expect(summary).toContain('jwt=expires:1h,secret:(默认)');
   });
 });
 
@@ -516,6 +538,10 @@ describe('配置 → 契约层：配置真的生效吗', () => {
               return readCorsConfig(EMPTY_ENV);
             case 'throttle':
               return readThrottleConfig(EMPTY_ENV);
+            case 'jwt':
+              // `AuthModule` 的选项也从这个桩里取（`jwtOptionsFactory`）——
+              // 开发默认密钥即可：这一组测的是契约层开关，认证在自己的测试模块里测。
+              return readJwtConfig(EMPTY_ENV);
             case 'database':
               return readDatabaseConfig(EMPTY_ENV);
             default:

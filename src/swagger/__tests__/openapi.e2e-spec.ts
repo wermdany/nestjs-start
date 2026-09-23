@@ -12,6 +12,7 @@ import {
   ERROR_ENVELOPE_REF,
   ERROR_ENVELOPE_SCHEMA,
   RESPONSE_ENVELOPE_REF,
+  UNAUTHENTICATED_EXAMPLE,
 } from '@/swagger/envelope.schema';
 import { isSwaggerEnabled } from '@/swagger/is-swagger-enabled';
 import {
@@ -38,6 +39,17 @@ import {
  * `buildDocument()` —— 线上入口和测试入口是同一个函数。
  * （以前这里自己写了一遍 `DocumentBuilder`，于是入口改了 title / `extraModels`
  * 而测试照样全绿 —— 那种测试等于没测。)
+ *
+ * ## 为什么这个文件在 `src/swagger/__tests__/` 而不是某个 demo 模块里
+ *
+ * 它测的是**整份文档**（全量路径清单、标签、悬空 `$ref`、信封组件、每条路由的失败响应），
+ * 那是 `src/swagger/` 的职责，不是任何一个 demo 的。放在 demo 模块里会有两个具体后果：
+ *
+ * 1. 每加一个控制器都要去改那个 demo 的测试文件（改的还是与它无关的断言）；
+ * 2. 新模块的文档知识会散落在旧模块的测试里。
+ *
+ * 所以：**文档级不变量归这里，每个模块的运行时行为归它自己的 `__tests__/`**
+ * （例如 `src/auth/__tests__/auth.e2e-spec.ts`）。
  */
 
 const ENVELOPE_COMPONENTS: Record<string, object> = {
@@ -86,6 +98,38 @@ function dataSchema(
 ): Record<string, unknown> | undefined {
   return responseSchema(document, path, method, status).allOf?.[1]?.properties
     ?.data as Record<string, unknown> | undefined;
+}
+
+/** 文档里的一条操作（原始对象，含 `tags` / `responses`）。 */
+interface OperationView {
+  tags?: string[];
+  responses: Record<string, unknown>;
+}
+
+/** 取某个操作的原始对象。 */
+function operationAt(
+  document: OpenAPIObject,
+  path: string,
+  method: string,
+): OperationView {
+  // `PathItemObject` 的方法位在类型上是 `any`：先收成 `unknown` 再断言一次，
+  // 这样既不会触发 `no-unsafe-return`，也不需要多余的 `as unknown as` 双断言。
+  const pathItem = document.paths[path] as Record<string, unknown>;
+
+  return pathItem[method] as OperationView;
+}
+
+/** 文档里出现的**全部**操作（path + method）—— 用于"逐条路由"的通用断言。 */
+function allOperations(
+  document: OpenAPIObject,
+): { path: string; method: string }[] {
+  const methods = ['get', 'post', 'put', 'patch', 'delete', 'options', 'head'];
+
+  return Object.keys(document.paths).flatMap((path) =>
+    methods
+      .filter((method) => method in (document.paths[path] as object))
+      .map((method) => ({ path, method })),
+  );
 }
 
 /**
@@ -139,10 +183,12 @@ describe('OpenAPI 文档', () => {
   });
 
   describe('路由覆盖', () => {
-    it('8 个路径 / 13 个操作都在文档里（含路径参数写法 {id}）', () => {
+    it('全量路径清单：每条路由都在文档里（含路径参数写法 {id}）', () => {
       const document = buildDocument(app);
 
       expect(Object.keys(document.paths).sort()).toEqual([
+        '/auth/login',
+        '/auth/profile',
         '/validation-demo/no-content',
         '/validation-demo/pipe-order/array-message',
         '/validation-demo/pipe-order/ids',
@@ -155,24 +201,23 @@ describe('OpenAPI 文档', () => {
       ]);
     });
 
-    it('两个控制器都打了 validation-demo 标签（v11 的自动打标签是关的，必须显式）', () => {
+    it('每条操作都有标签（v11 的自动打标签是关的，必须显式）', () => {
       const document = buildDocument(app);
 
-      for (const path of Object.keys(document.paths)) {
-        for (const operation of Object.values(
-          document.paths[path] as Record<string, unknown>,
-        )) {
-          if (
-            operation &&
-            typeof operation === 'object' &&
-            'tags' in operation
-          ) {
-            expect((operation as { tags: string[] }).tags).toContain(
-              'validation-demo',
-            );
-          }
-        }
+      for (const { path, method } of allOperations(document)) {
+        expect(operationAt(document, path, method).tags ?? []).not.toEqual([]);
       }
+    });
+
+    it('两组接口各自的标签都在（validation-demo / auth）', () => {
+      const document = buildDocument(app);
+
+      expect(
+        operationAt(document, '/validation-demo/users', 'post').tags,
+      ).toContain('validation-demo');
+      expect(operationAt(document, '/auth/profile', 'get').tags).toContain(
+        'auth',
+      );
     });
   });
 
@@ -243,6 +288,55 @@ describe('OpenAPI 文档', () => {
           expect.arrayContaining(['400', '404', '500']),
         );
       }
+    });
+
+    /**
+     * 认证的文档契约（`@ApiEnvelopeUnauthorized()`）。
+     *
+     * 与 `src/auth/__tests__/auth.e2e-spec.ts` 是**两侧**：那边钉运行时
+     * （真发请求，断言状态码 / 头 / 键集），这边钉文档声明。引用的是同一份示例常量，
+     * 所以"文档里写的形状"和"运行时给的形状"只可能一起变。
+     */
+    it('需要认证的路由声明了 401', () => {
+      const document = buildDocument(app);
+
+      expect(
+        Object.keys(operationAt(document, '/auth/profile', 'get').responses),
+      ).toEqual(expect.arrayContaining(['401']));
+    });
+
+    it('AuthController 的**每条**路由都声明 401（对登录也是准确的）', () => {
+      const document = buildDocument(app);
+      const login = Object.keys(
+        operationAt(document, '/auth/login', 'post').responses,
+      );
+
+      // `/auth/login` 带 `@Public()`（不要求**已有**凭证），但凭证不对时它确实返回 401 ——
+      // 所以类级声明在它身上是准确描述，不是过度声明。
+      expect(login).toEqual(expect.arrayContaining(['401']));
+      // 通用的类级失败响应依然在
+      expect(login).toEqual(expect.arrayContaining(['400', '404', '500']));
+      // 本仓库只做认证、没有授权层，文档里就不该出现 403
+      expect(login).not.toContain('403');
+    });
+
+    it('401 指向错误信封，且示例键集与运行时一致（没有 errors）', () => {
+      const document = buildDocument(app);
+      const schema = responseSchema(
+        document,
+        '/auth/profile',
+        'get',
+        '401',
+      ) as {
+        allOf?: { $ref?: string }[];
+        example?: Record<string, unknown>;
+      };
+
+      expect(schema.allOf?.[0]?.$ref).toBe(ERROR_ENVELOPE_REF);
+      // 键集精确比对：认证失败**没有**字段级明细（`errors` 只在 400 上）
+      expect(Object.keys(schema.example ?? {}).sort()).toEqual(
+        Object.keys(UNAUTHENTICATED_EXAMPLE).sort(),
+      );
     });
 
     it('400 指向错误信封，且 errors[].$ref 指向 ErrorDetail 组件', () => {

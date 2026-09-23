@@ -74,6 +74,7 @@ export {
   getRequestContext,
   getRequestId,
   runWithRequestContext,
+  setRequestUserId,
 } from './observability/request-context';
 export type { RequestContext } from './observability/request-context';
 
