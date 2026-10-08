@@ -1,7 +1,7 @@
 /**
  * 配置模块（`src/config/`）的**对外门面**。
  *
- * 与 `src/contract/index.ts` 同一套规矩：**内部互相引用走具体文件**（`api-contract.module.ts`
+ * 与 `src/system/http-validation/index.ts` 同一套规矩：**内部互相引用走具体文件**（`http-enhancers.module.ts`
  * 里写 `./env` 而不是 `@/config`），门面只做**显式具名导出**，不用 `export *`
  * （`export *` 的重名遮蔽与书写顺序问题在契约层的注释里记过）。
  */
@@ -30,14 +30,21 @@ export {
   DEFAULT_ENVELOPE,
   DEFAULT_JWT_EXPIRES_IN,
   DEFAULT_JWT_SECRET,
+  DEFAULT_LOG_DIR,
+  DEFAULT_LOG_FILE,
+  DEFAULT_LOG_MAX_BYTES,
+  DEFAULT_LOG_MAX_FILES,
   DEFAULT_NODE_ENV,
   DEFAULT_PORT,
   DEFAULT_STRICT_VALIDATION,
   DEFAULT_SWAGGER_SERVER_URL,
   DEFAULT_THROTTLE_LIMIT,
   DEFAULT_THROTTLE_TTL_SECONDS,
+  defaultLogLevelFor,
+  isLogLevelName,
   JWT_EXPIRES_IN_PATTERN,
   JWT_SECRET_MIN_WARN_LENGTH,
+  LOG_LEVELS,
   NODE_ENVS,
   parseCorsOrigins,
   toBoolean,
@@ -45,7 +52,7 @@ export {
   toOptionalInt,
   toOptionalString,
 } from './env';
-export type { DatabaseDriver } from './env';
+export type { DatabaseDriver, LogLevelName } from './env';
 
 // ── 六个 namespace 的读取函数与 registerAs 工厂 ───────────────────────────────
 export { appConfig, readAppConfig } from './app.config';
@@ -64,6 +71,9 @@ export type { CorsConfig, ThrottleConfig } from './platform.config';
 
 export { jwtConfig, readJwtConfig } from './jwt.config';
 export type { JwtConfig } from './jwt.config';
+
+export { logConfig, readLogConfig } from './log.config';
+export type { LogConfig } from './log.config';
 
 export { databaseConfig, readDatabaseConfig } from './database.config';
 export type { DatabaseConfig } from './database.config';

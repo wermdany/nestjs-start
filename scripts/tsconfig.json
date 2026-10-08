@@ -1,0 +1,59 @@
+{
+  /**
+   * 构建脚本（`scripts/`）**自己的** project —— 它只被 `ts-node` 使用，不参与 `nest build`。
+   *
+   * ## 为什么脚本不编译进 `dist/`，而是用 ts-node 直接跑
+   *
+   * 实测过两条路，都走不通 / 不划算：
+   *
+   * 1. **让 `nest build` 一起编译** —— 不行：脚本住在仓库根的 `scripts/`，
+   *    与 `src/` 的公共祖先是仓库根 ⇒ tsc 推断的 `rootDir` 从 `src` 漂移成仓库根
+   *    ⇒ 产物从 `dist/main.js` 变成 `dist/src/main.js`，`pnpm start:prod` 直接失效。
+   *    （这个坑本仓库在 `packages/api-contract` 时代实测踩过一次，见根 `tsconfig.json` 的注释。）
+   * 2. **单独 `tsc -p scripts/tsconfig.json`** —— 不行：`tsc` **不会重写 `paths` 别名**，
+   *    产物里会留着 `require("@/app.module")`，运行时报 `MODULE_NOT_FOUND`
+   *    （重写别名是 Nest CLI 在 emit 前做的事）。
+   *
+   * 所以走第三条：**用 `ts-node` 直接执行**。
+   * 好处是 `dist/` 由"服务端编译产物"独享，构建脚本的源码**永远不会**进发布产物 ——
+   * 这正是"脚本与运行时分离"想要的结果。代价是执行时多一次编译（几百毫秒，可接受）。
+   *
+   * ## 为什么这里要覆盖 `module` / `moduleResolution`
+   *
+   * 根配置是 `nodenext`，而本包是 CommonJS（`package.json` 没有 `"type": "module"`）。
+   * ts-node 在 `nodenext` 下对 CJS 的判定很容易出岔子，显式退回 `commonjs` + `node` 最稳。
+   * `esModuleInterop` / `target` / `paths` 等都从根配置继承。
+   */
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    // `resolvePackageJsonExports` 只在 moduleResolution 为 node16/nodenext/bundler 时可用 ——
+    // 上面已退回 `node`，所以这里必须显式关掉，否则 tsc 直接报 TS5098。
+    "resolvePackageJsonExports": false,
+    // 可执行入口不是库：不产出 `.d.ts`
+    "declaration": false,
+    // 别名解析交给 `tsconfig-paths/register`（见 package.json 的 openapi:export）。
+    // 注意 `paths` 从根配置继承 —— 它的相对路径以**根配置所在目录**为基准，
+    // 也就是仓库根，所以 `@/*` → `src/*` 在这里同样成立。
+    //
+    // ⚠️ 刻意**不设 `rootDir`**：脚本通过 `@/...` 引用 `src/`，那些文件也在本 program 里，
+    // 而 `rootDir` 必须包含所有输入文件 —— 设成 `scripts/` 会直接报 TS6059。
+    // 本 project 不 emit（ts-node 自己编译、typecheck 走 `--noEmit`），所以 `rootDir` 本就不需要。
+    //
+    // ⚠️⚠️ **`noEmit` 是硬性要求，不要删**。它不只是"省事"：本 project 的输入横跨
+    // `scripts/` 与 `src/`，一旦 emit，输出的目录结构与落点取决于 tsc 推断的 `rootDir`
+    // —— 本仓库真实发生过一次：`src/` 下出现 78 个 `.js` + 78 个 `.js.map`（结构与 `src/` 完全镜像），
+    // 而 `.js` 会被 Node/jest **优先于同名 `.ts` 命中**，导致 `pnpm start:dev` 静默跑编译产物、
+    // 改了源码却不生效。宁可让它根本不能 emit。
+    // （`.gitignore` 也加了对应的忽略规则作为第二道防线。）
+    "noEmit": true
+  },
+  /**
+   * ⚠️ `include` / `exclude` 都必须显式写：`extends` 出来的 **`exclude` 是覆盖而非合并**，
+   * 而根配置的 `exclude` 里有 `"scripts"`（那是为了让 `nest build` 不把脚本拉进服务端 program）。
+   * 如果这里不覆盖掉它，本 project 会"排除掉自己" —— tsc 报 `TS18003: No inputs were found`。
+   */
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules"]
+}

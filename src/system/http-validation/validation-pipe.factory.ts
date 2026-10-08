@@ -11,8 +11,7 @@ import { createValidationExceptionFactory } from './validation-exception.factory
  *   单独开它（whitelist: false）是**完全没有效果**的。
  * - transform：把 plain object 转成 DTO 实例（`@Type()`、默认值、`@Type(() => Number)` 才会生效）
  * - exceptionFactory：校验失败输出结构化错误
- *   `{ code: 'VALIDATION_FAILED', message: 'Request validation failed',
- *      errors: [{ field, message, code }] }`，
+ *   `{ message: 'Request validation failed', errors: [{ field, message }] }`，
  *   而不是 Nest 默认的字符串数组。失败响应的 `success` / `error` / `traceId` 由
  *   `AppExceptionFilter` 补齐（管道只负责把明细结构化）。`errors[].location` 由
  *   `ContractValidationPipe` 补（见那个文件里"为什么必须继承"的说明）。

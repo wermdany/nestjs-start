@@ -15,23 +15,25 @@
     "outDir": "./dist",
     "baseUrl": "./",
     "paths": {
-      "@/*": ["src/*"],
-      "@nest-start/api-contract": ["packages/api-contract/dist/index.d.ts"]
+      "@/*": ["src/*"]
     },
     "incremental": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true
   },
   /**
-   * `packages/**` 是**独立的 project**（有自己的 `packages/api-contract/tsconfig.json`）。
+   * 这里**只**需要排除构建产物与依赖。
    *
-   * 必须在这里排除，否则 `include` 的默认值会把契约包的源码拉进服务端的 program，
-   * tsc 推断出的 `rootDir` 会从 `src` 变成仓库根 —— 产物从 `dist/main.js`
-   * 变成 `dist/src/main.js`，`pnpm start:prod` 直接失效（实测踩过）。
+   * 历史：本仓库曾经有一个 `packages/api-contract` 类型的 workspace 包（前后端共享契约），
+   * 它必须被排除，否则 `include` 的默认值会把它的源码拉进服务端的 program、
+   * 让 tsc 推断出的 `rootDir` 从 `src` 变成仓库根（产物变 `dist/src/main.js`）。
+   * 项目改为纯单后端后，那些线上形状类型已内联到 `src/system/http-contract/`，
+   * 与 `src/` 同一个 project —— 所以不再需要那条排除。
    *
-   * 服务端只通过上面 `paths` 指向的 **`.d.ts`** 消费它：声明文件不参与 emit，
-   * 所以既不影响 `rootDir`，也不需要运行时能解析到这个包
-   * （包本身零运行时导出，import 会被完全擦除，见 `packages/api-contract/src/index.ts`）。
+   * ⚠️ **`scripts/` 必须排除**：它同样住在仓库根，一旦进入这个 program 就会重演上面那个坑
+   * （`src/` 与 `scripts/` 的公共祖先是仓库根 ⇒ tsc 推断的 `rootDir` 漂移 ⇒ 产物变 `dist/src/main.js`，
+   * `pnpm start:prod` 直接失效）。构建脚本有**自己的** `scripts/tsconfig.json`，
+   * 由 `pnpm openapi:export` 用 ts-node 直接执行 —— 见那个文件的说明。
    */
-  "exclude": ["node_modules", "dist", "packages"]
+  "exclude": ["node_modules", "dist", "scripts"]
 }

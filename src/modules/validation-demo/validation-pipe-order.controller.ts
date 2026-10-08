@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Public } from '@/auth';
-import { createValidationPipe } from '@/contract';
+import { createValidationPipe } from '@/system/http-validation';
 import { ApiOkEnvelope } from '@/swagger/api-envelope.decorator';
 import { ApiCreatedEnvelope } from '@/swagger/api-envelope.decorator';
 import { ApiEnvelopeErrors } from '@/swagger/api-errors.decorator';

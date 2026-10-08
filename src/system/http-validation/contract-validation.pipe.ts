@@ -1,7 +1,7 @@
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import type { ArgumentMetadata, ValidationPipeOptions } from '@nestjs/common';
-import type { ErrorDetail } from './error-contract';
-import { isErrorLocation } from './error-location';
+import type { ErrorDetail } from '../http-contract';
+import { isErrorLocation } from '../http-contract';
 import { annotateErrorDetails } from './validation-exception.factory';
 
 /**
@@ -15,8 +15,8 @@ import { annotateErrorDetails } from './validation-exception.factory';
  *
  * ```ts
  * // 于是 `field: "id"` 不再有歧义：
- * GET  /users/abc      → errors: [{ field: "id", location: "param", code: "INVALID_TYPE" }]
- * POST /users {id:…}   → errors: [{ field: "id", location: "body",  code: "INVALID_TYPE" }]
+ * GET  /users/abc      → errors: [{ field: "id", location: "param", message: "…" }]
+ * POST /users {id:…}   → errors: [{ field: "id", location: "body",  message: "…" }]
  * ```
  *
  * ## 只做浅包装

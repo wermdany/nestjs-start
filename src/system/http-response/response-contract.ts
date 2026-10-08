@@ -1,8 +1,9 @@
 /**
  * 全站响应契约。核心只有一条：**body 里只放 HTTP 层给不了的东西**。
  *
- * 形状本身定义在 `@nest-start/api-contract`（前后端共享的那一份）：
- * 这里只保留**服务端运行时**才需要的东西（两个 symbol 标记），并把类型转出来。
+ * 形状本身定义在 `../http-contract`（零依赖叶子）：这里只保留**服务端运行时**
+ * 才需要的东西（两个 symbol 标记），并把类型**重新导出**一次，
+ * 让「响应侧」的消费方（如 `ResponseEnvelopeInterceptor`）只认一个入口。
  *
  * ```jsonc
  * // 成功：{ success, data, meta? }
@@ -10,13 +11,12 @@
  * { "success": true, "data": [ ... ],
  *   "meta": { "totalItems": 3, "itemsPerPage": 50, "currentPage": 1 } }
  *
- * // 失败：{ success, error, message, code?, traceId?, errors? }
+ * // 失败：{ success, error, message, traceId?, errors? }
  * { "success": false, "error": "Bad Request", "message": "Request validation failed",
- *   "code": "VALIDATION_FAILED", "traceId": "3f1c9a4e-…",
- *   "errors": [ { "field": "name", "location": "body", "message": "name must be a string",
- *                 "code": "INVALID_TYPE" } ] }
+ *   "traceId": "3f1c9a4e-…",
+ *   "errors": [ { "field": "name", "location": "body", "message": "name must be a string" } ] }
  * { "success": false, "error": "Not Found", "message": "user 999999 not found",
- *   "code": "USER_NOT_FOUND", "traceId": "3f1c9a4e-…" }
+ *   "traceId": "3f1c9a4e-…" }
  * ```
  *
  * 字段规则（`ResponseBody<T>` 就是成功/失败两者的可判别联合）：
@@ -26,21 +26,22 @@
  * | `success` | 是 | **唯一判据**。`true` 必有 `data`，`false` 必有 `error` + `message` |
  * | `data` | 仅成功 | handler 的返回值；分页时是**这一页的数据数组** |
  * | `meta` | 仅成功、仅有元数据时 | 分页元信息（`totalItems` / `itemsPerPage` / `currentPage`） |
- * | `error` | 仅失败 | HTTP 状态短语，如 `Bad Request` |
- * | `code` | 仅失败、仅有语义时 | **机器判据**（前端 `switch` 它，不要 parse `message`） |
+ * | `error` | 仅失败 | HTTP 状态短语，如 `Bad Request` —— **失败侧唯一的大类判据** |
  * | `traceId` | 仅失败（真实 HTTP 请求里恒有） | 请求 id，同时回写在 `x-request-id` 响应头 |
  * | `message` | 仅失败 | 人类可读说明 |
- * | `errors` | 仅失败、仅有字段级明细时 | `{ field, location?, message, code? }[]` |
+ * | `errors` | 仅失败、仅有字段级明细时 | `{ field, location?, message }[]` |
  *
- * 三条刻意为之的取舍：
+ * 四条刻意为之的取舍：
  *
  * - **数字状态码不放进 body**（不管是 200 还是 404）。它由 HTTP 状态行表达，
  *   前端从 `res.status`（axios 是 `error.response.status`）拿即可；在 body 里再冗余一份，
  *   既没有信息增量，又埋了"body 与状态行漂移"的隐患。这是 RFC 9110 的分工：状态码属于 HTTP 层。
  * - **成功响应没有 `message`**。成功文案该由前端按接口 / `data` 自己出（前端有 i18n、设计规范）；
  *   后端下发文案只会让它变成事实上的对外契约，改一个字都变成破坏性变更。
- * - **失败响应有 `message`**：它是人话说明，是 `errors[]` 之外唯一的可读信息，前端要拿它 toast；
- *   但**判据是 `code`**，`message` 可以随便改（含 i18n）而不算破坏性变更。
+ * - **失败响应有 `message`**：它是人话说明，是 `errors[]` 之外唯一的可读信息，前端要拿它 toast。
+ * - **失败侧没有 `code`**（已刻意移除）。于是 `error` 是唯一的大类判据，
+ *   同一状态码下的不同业务原因只能靠 `message` 区分 —— 这是已知代价，
+ *   详见 `../http-contract` 里 `ErrorBody` 的注释。
  *
  * 两条实现上的约定：
  *
@@ -54,7 +55,7 @@ export type {
   ErrorLocation,
   ResponseBody,
   SuccessBody,
-} from '@nest-start/api-contract';
+} from '../http-contract';
 
 /**
  * 标记「这是分页结果」的私有 symbol。

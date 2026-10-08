@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { appConfig } from './app.config';
 import { jwtConfig } from './jwt.config';
+import { logConfig } from './log.config';
 import { databaseConfig } from './database.config';
 import { DEFAULT_NODE_ENV, isNodeEnv } from './env';
 import { corsConfig, throttleConfig } from './platform.config';
@@ -76,6 +77,7 @@ export function shouldIgnoreEnvFile(env: EnvSource = process.env): boolean {
         corsConfig,
         throttleConfig,
         jwtConfig,
+        logConfig,
         databaseConfig,
       ],
     }),

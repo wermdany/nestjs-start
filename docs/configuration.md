@@ -10,12 +10,13 @@ pnpm start:dev
 启动时会打一行摘要（**不含任何密码，也不含 JWT 密钥**）：
 
 ```
-[bootstrap] env=development port=3000 host=(默认: 全部网卡) swagger=on(http://localhost:3000) jwt=expires:1h,secret:(默认) cors=*(预留) throttle=60s/100(预留) db=memory(预留)
+[bootstrap] env=development port=3000 host=(默认: 全部网卡) swagger=on(http://localhost:3000) jwt=expires:1h,secret:(默认) log=debug,file=logs/app.log cors=* throttle=60s/100 db=memory(预留)
 ```
 
 > `(预留)` 表示这个 namespace **还没有消费者** —— 配置契约已经立好并参与校验，
-> 但接线在 A2（CORS / 限流）与 B1（数据库）。接线后请把
+> 但接线还没做（现在只剩 B1 数据库）。接线后请把
 > `src/config/describe-config.ts` 的 `RESERVED_NAMESPACES` 里对应项删掉。
+> `cors` / `throttle` **曾经也带这个后缀**：A2 的 `src/platform/` 落地后它们有消费者了。
 > `jwt` **不是**预留：它已经有消费者（`AuthModule`），但摘要里**只说明密钥是"内置默认"
 > 还是"已配置"**，以及有效期 —— 密钥本身永不出现。
 
@@ -28,10 +29,10 @@ pnpm start:dev
 | 文件 | 职责 |
 | --- | --- |
 | `env.ts` | **env 的单一事实来源**：变量名/默认值常量、类型转换、校验类、`validateEnv`、告警规则 |
-| `app.config.ts` / `swagger.config.ts` / `platform.config.ts` / `jwt.config.ts` / `database.config.ts` | 五个文件的 **6 个 namespace**，每个都先导出**纯函数** `read*Config(env)`，再用 `registerAs()` 包一层 |
+| `app.config.ts` / `swagger.config.ts` / `platform.config.ts` / `jwt.config.ts` / `log.config.ts` / `database.config.ts` | 六个文件的 **7 个 namespace**（`app` / `swagger` / `cors` / `throttle` / `jwt` / `log` / `database`，其中 `platform.config.ts` 出 `cors` 与 `throttle` 两个），每个都先导出**纯函数** `read*Config(env)`，再用 `registerAs()` 包一层 |
 | `describe-config.ts` | `readResolvedConfig()` / `formatConfigSummary()` / `redactUrl()` |
 | `app-config.module.ts` | `AppConfigModule`（`ConfigModule.forRoot`）+ `resolveEnvFilePaths()` / `shouldIgnoreEnvFile()` |
-| `index.ts` | 门面桶（显式具名导出，与 `src/contract/index.ts` 同一套规矩） |
+| `index.ts` | 门面桶（显式具名导出，与 `src/system/*/index.ts` 各模块门面同一套规矩） |
 
 `.env` 文件**按优先级从高到低**（先命中的生效）：
 
@@ -83,9 +84,9 @@ export function apiContractOptionsFactory(config: ConfigService): ApiContractOpt
 | --- | --- | --- |
 | `STRICT_VALIDATION=true` | 多一个未声明字段 → 400（默认被静默剥掉） | `POST /users` 带 `extra` → 400 + `errors[].field="extra"` |
 | `ENABLE_ENVELOPE=false` | 成功响应是 handler 裸返回值 | `GET /users/1` → `{"id":1,...}`，没有 `success` |
-| 同上 | **失败侧不受影响** | `GET /users/999999` → 仍是 `{success:false, code:"USER_NOT_FOUND"}` |
+| 同上 | **失败侧不受影响** | `GET /users/999999` → 仍是 `{success:false, error:"Not Found", message:"user 999999 not found"}` |
 
-映射放在组合根（而不是 `src/config/` 或 `src/contract/`）是刻意的：
+映射放在组合根（而不是 `src/config/` 或 `src/system/http-*`）是刻意的：
 `config` 不该认识契约、`contract` 不该认识配置，把两者粘起来是 `app.module.ts` 的职责。
 它被单独导出成函数，测试里可以直接断言映射结果。
 
@@ -115,6 +116,29 @@ JWT_EXPIRES_IN=1h
 > 这是**演示级**实现：密码明文、无刷新令牌、无吊销 —— 见
 > [`docs/authentication.md`](authentication.md) §7 / §11。
 
+### 日志（Observability）
+
+日志自己有六个变量 —— 它们是"日志写到哪、写多细、留多久"的全部旋钮。
+
+| 变量 | 默认 | 校验 | 说明 |
+| --- | --- | --- | --- |
+| `LOG_LEVEL` | dev=`debug`、test=`warn`、prod=`log` | `verbose` / `debug` / `log` / `warn` / `error` / `fatal` | 输出阈值（低于它的直接丢弃） |
+| `LOG_TO_FILE` | 非 test=`true`、test=`false` | 恰好 `true` / `false` | 是否同时写本地文件 |
+| `LOG_DIR` | `logs` | 非空字符串 | 目录（不存在自动创建） |
+| `LOG_FILE` | `app.log` | 非空、**不含路径分隔符** | 活动文件名；目录只能由 `LOG_DIR` 管 |
+| `LOG_MAX_BYTES` | `10485760`（10MB） | ≥0 的整数（0 = 只按天滚动） | 超过即滚动 |
+| `LOG_MAX_FILES` | `5` | 0..100 的整数 | 保留的历史文件数（不含活动文件） |
+
+- 落盘内容是 **NDJSON**（一行一条 JSON）；dev 的 stdout 是同一内容的一行摘要，`pretty` 由
+  `NODE_ENV` 推导（非 production 才开），**不是**环境变量。
+- **测试环境默认不落盘**：既不污染仓库，也不让写盘拖慢用例（原先有一条专门的 `logging.e2e-spec.ts`
+  会显式打开并写到临时目录 —— 测试已全部删除）。
+- 启动摘要里会带上 `log=debug,file=logs/app.log`（不落盘时是 `file=off`）——
+  这是运维第一眼要看的东西：日志没在写，别的排障手段都会打折扣。
+
+> 完整规范（字段、滚动策略、失败降级、多进程注意、怎么写才算合格的日志）见
+> [`docs/logging.md`](logging.md)。
+
 ### 接口文档
 
 | 变量 | 默认 | 校验 | 消费者 |
@@ -122,7 +146,7 @@ JWT_EXPIRES_IN=1h
 | `ENABLE_SWAGGER` | 由规则决定 | **不校验** | ✅ `main.ts` → `setupSwagger` |
 | `SWAGGER_SERVER_URL` | `http://localhost:3000` | 合法 URL | ✅ `main.ts` → `setupSwagger` |
 
-`ENABLE_SWAGGER` 的规则仍住在 `src/swagger/is-swagger-enabled.ts`（4 种组合有 e2e 钉住）：
+`ENABLE_SWAGGER` 的规则仍住在 `src/swagger/is-swagger-enabled.ts`（4 种组合原先有 e2e 钉住，测试已删除）：
 
 | `ENABLE_SWAGGER` | `NODE_ENV` | 结果 |
 | --- | --- | --- |
@@ -133,15 +157,19 @@ JWT_EXPIRES_IN=1h
 
 > 只认**恰好** `'true'` / `'false'`。`'1'` / `'yes'` 这类"含糊真值"**不算显式**，按未设处理
 > —— 而不是报错。这与其它新布尔变量（严格）是**刻意的不对称**：这条规则先于本模块存在、
-> 已被 e2e 钉住，改成报错属于行为变更；新变量则一律从严。
+> 原先已被 e2e 钉住（测试已删除），改成报错属于行为变更；新变量则一律从严。
 
-### 平台层（🅿️ 预留，A2 接线）
+### 平台层（✅ A2 已接线：`src/platform/`）
 
 | 变量 | 默认 | 校验 | 消费者 |
 | --- | --- | --- | --- |
-| `CORS_ORIGINS` | `*` | 逗号分隔、逐项非空 | 🅿️ A2 |
-| `THROTTLE_TTL_SECONDS` | `60` | 大于 0 的整数 | 🅿️ A2 |
-| `THROTTLE_LIMIT` | `100` | 大于 0 的整数 | 🅿️ A2 |
+| `CORS_ORIGINS` | `*` | 逗号分隔、逐项非空；**生产环境含 `*` ⇒ 拒绝启动** | `platformOptionsFactory()` → `toCorsOptions()` → `main.ts` 的 `app.enableCors()` |
+| `THROTTLE_TTL_SECONDS` | `60` | 大于 0 的整数 | 同上 → `toThrottlerOptions()`（**换算成毫秒**）→ `PlatformModule` 的 `ThrottlerGuard` |
+| `THROTTLE_LIMIT` | `100` | 大于 0 的整数 | 同上（窗口内**允许**的请求数：`3` ⇒ 第 4 次 429） |
+
+> 两个变量的**政策**（通配来源不带凭证、秒→毫秒）写在
+> `src/platform/platform.options.ts`，不在配置层 —— 配置层只管"形状与取值域"。
+> 实测见 [README §配置](../README.md#配置) 与 `docs/learning-next.md` §4。
 
 ### 数据库（🅿️ 预留，B1 接线）
 
@@ -171,14 +199,20 @@ JWT_EXPIRES_IN=1h
 - `JWT_EXPIRES_IN` 格式不对（不是「数字 + `s`/`m`/`h`/`d`」，例如 `forever` / `1 hour`）；
 - **`NODE_ENV=production` 时 `JWT_SECRET` 未配置**，或显式等于源码里那个公开的默认值
   —— 两种都等于"没有签名"，所以直接拒绝启动；
+- `LOG_LEVEL` 不是六个合法级别之一、`LOG_TO_FILE` 不是恰好 `true`/`false`、
+  `LOG_MAX_BYTES` / `LOG_MAX_FILES` 越界，或 `LOG_FILE` 里带了路径分隔符
+  （目录只能由 `LOG_DIR` 管 —— 否则 `LOG_FILE=../../etc/hosts` 这种写法会静默写到意外的地方）；
 - 数据库**跨字段**不成立：`driver ≠ memory` 且既没有 `DATABASE_URL`，又缺 `HOST` / `USER` / `NAME`
   （sqlite 只要求 `NAME`）；
 - `NODE_ENV=production` 且 `DATABASE_SYNCHRONIZE=true` —— 让 ORM 自动改表是数据事故，
-  生产请用 `DATABASE_MIGRATIONS_RUN=true` 走迁移。
+  生产请用 `DATABASE_MIGRATIONS_RUN=true` 走迁移；
+- **`NODE_ENV=production` 时 `CORS_ORIGINS` 未设或含 `*`** —— 两个独立理由：
+  浏览器规范禁止 `Access-Control-Allow-Origin: *` 与凭证同时出现（通配来源等于
+  "永远不能带 Cookie"），而它本身就是"没有来源边界"。
+  ⚠️ 这条**曾经只是告警**（那时 CORS 还没接线），A2 落地后升级为致命。
 
 **告警**（只打 `WARN [ConfigModule]`，不拦启动）：
 
-- 生产环境 `CORS_ORIGINS` 未设或为 `*`（A2 接上 CORS 后升级为致命）；
 - 生产环境 `DATABASE_LOGGING=true`（SQL 可能带出敏感数据）；
 - 生产环境 `ENABLE_SWAGGER=true`（会暴露完整接口文档）；
 - `DATABASE_DRIVER=memory` 却配了 `DATABASE_PASSWORD` —— 典型的"以为它在生效"；
@@ -263,7 +297,7 @@ bootstrap().catch((error) => {
 ```
 
 代价：**每个会创建应用的入口都要记得调用一次**。目前有两个：
-`src/main.ts` 与 `src/swagger/export-openapi.ts`。新增入口（serverless handler、worker）时照着加。
+`src/main.ts` 与 `scripts/export-openapi.ts`（原 `src/swagger/export-openapi.ts`）。新增入口（serverless handler、worker）时照着加。
 
 ### 5.2 用 `class-validator`，不引 zod / Joi
 
@@ -298,7 +332,10 @@ const port = config.get('PORT');                     // ❌ 拿到的是原始�
 不进 OpenAPI 文档：
 
 - `describeJwt()` 只输出"是默认值还是已配置"与有效期（`jwt=expires:1h,secret:(默认)`）；
-- 与 JWT 相关的启动期问题只说"哪个变量不对"，**绝不复述密钥内容**。
+- 与 JWT 相关的启动期问题只说"哪个变量不对"，**绝不复述密钥内容**；
+- 日志本身也做了脱敏：字段名命中 `authorization` / `cookie` / `password` / `secret` / `token`
+  的值会被替换成 `[redacted]`（递归生效），而且是"最后一道兜底" —— 规范要求不把整个
+  `headers` / `dto` 丢进日志（见 [`docs/logging.md`](logging.md) §5）。
 
 ---
 
@@ -309,7 +346,8 @@ const port = config.get('PORT');                     // ❌ 拿到的是原始�
 3. 需要跨字段规则就加进 `findCrossFieldProblems()`；只告警就加进 `configWarnings()`；
 4. 在对应的 `read*Config(env)` 里读出来（用 `toInt` / `toBoolean` / `toOptionalString` …）；
 5. 在 `.env.example` 里写下说明（含默认值与注意事项）；
-6. 在 `src/config/__tests__/config.e2e-spec.ts` 里补：**默认值**、**非法值被拒**、**边界**；
+6. 测试重建后，在 `src/config/__tests__/config.e2e-spec.ts` 里补：**默认值**、**非法值被拒**、**边界**
+   （该文件与全部测试一起被删除，目前 `pnpm test` 无测试可跑）；
 7. 更新本文件第 2 节的表。
 
 ---
@@ -317,6 +355,7 @@ const port = config.get('PORT');                     // ❌ 拿到的是原始�
 ## 7. 相关文档
 
 - [`docs/authentication.md`](authentication.md)：`JWT_SECRET` / `JWT_EXPIRES_IN` 的消费者（登录 + 守卫）。
+- [`docs/logging.md`](logging.md)：`LOG_*` 的消费者（日志接管 + 本地滚动文件）。
 - [`docs/review-backlog.md`](review-backlog.md) §3.4：这一项的来源与验收方式。
 - [`docs/validation.md`](validation.md) §9：响应契约（配置错误也走同一套失败信封吗？——
   见 §5.1：配置错误发生在请求之前，所以它不进 HTTP 契约，直接以非零退出码结束进程）。

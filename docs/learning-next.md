@@ -8,8 +8,8 @@
 > **定位**：不是替代 [nestjs-learning-plan.md](nestjs-learning-plan.md)，而是它的**补丁**——
 > 那三份文档负责「是什么、为什么」，本文负责「**现在做什么、怎么验收**」。
 >
-> **实测基线**：2026-09-23，`pnpm test:e2e` → **4 suites / 107 tests 全绿**；`pnpm test` → **5 suites / 58 单测全绿**；
-> `tsc --strict` → **32 处**（新写的 `src/auth/**` 与 `jwt` 配置贡献 **0**）。
+> **实测基线**：2026-09-23，`pnpm test:e2e` → **5 suites / 117 tests 全绿**；`pnpm test` → **8 suites / 107 单测全绿**；
+> `tsc --strict` → **32 处**（新写的 `src/auth/**`、`src/observability/**` 与 `jwt` / `log` 配置贡献 **0**）。
 >
 > **进展**：§3.1 先实现了"静态 token + RBAC"，随后**被 JWT 登录模块整体替换**
 > （现在只有认证、没有授权层）—— 见 [`docs/authentication.md`](authentication.md)。
@@ -43,27 +43,27 @@ grep -c '^- \[ \]' docs/learning-next.md   # 未完成
 
 | 能力 | 落点 | 对应计划章节 |
 | --- | --- | --- |
-| 统一响应信封（幂等、分页 symbol 标记） | [src/contract/response/](../src/contract/response/) | §2.8 |
-| 统一错误信封（`code` / `location` / `traceId`） | [http-exception.filter.ts](../src/contract/validation/http-exception.filter.ts) | §2.5、§5.5 |
-| 校验管道 + DTO + 约束名→语义 code 映射 | [contract-validation.pipe.ts](../src/contract/validation/contract-validation.pipe.ts)、[error-code.ts](../src/contract/validation/error-code.ts) | §2.6、§5.2 |
-| 请求 id 中间件（AsyncLocalStorage → `traceId` + `x-request-id`） | [request-id.middleware.ts](../src/contract/observability/request-id.middleware.ts) | §2.4 |
-| 动态模块 + options token + `forRootAsync` | [api-contract.module.ts](../src/contract/api-contract.module.ts) | §3.1–§3.3 |
+| 统一响应信封（幂等、分页 symbol 标记） | [src/system/http-response/](../src/system/http-response/) | §2.8 |
+| 统一错误信封（`error` / `location` / `traceId`） | [http-exception.filter.ts](../src/system/http-validation/http-exception.filter.ts) | §2.5、§5.5 |
+| 校验管道 + DTO + 结构化错误明细 | [contract-validation.pipe.ts](../src/system/http-validation/contract-validation.pipe.ts)、错误码映射（已删除：本仓库移除了 `code` 字段） | §2.6、§5.2 |
+| 请求 id 中间件（AsyncLocalStorage → `traceId` + `x-request-id`） | [request-id.middleware.ts](../src/system/request-context/request-id.middleware.ts) | §2.4 |
+| 动态模块 + options token + `forRootAsync` | [http-enhancers.module.ts](../src/http-enhancers.module.ts) | §3.1–§3.3 |
 | 配置层：5 namespace + 启动即校验 + 预留契约 | [src/config/](../src/config/)、[configuration.md](configuration.md) | §5.1 |
 | Swagger 单一构建函数 + 悬空 `$ref` 守卫 + CLI 插件 | [src/swagger/](../src/swagger/) | §5.6 |
-| 共享契约包（纯类型、零运行时导出） | [packages/api-contract/](../packages/api-contract/) | 计划外，超出原计划 |
-| e2e：契约形状 + OpenAPI 文档 + 配置校验 | [jest-e2e.json](../jest-e2e.json)、三个 `.e2e-spec.ts` | §4 的 e2e 一半 |
+| 内联契约（纯类型、零运行时导出，原 `packages/api-contract`） | [src/system/http-contract/](../src/system/http-contract/) | 计划外，超出原计划 |
+| e2e：契约形状 + OpenAPI 文档 + 配置校验 | [jest-e2e.json](../jest-e2e.json)（e2e 用例已删除，配置保留） | §4 的 e2e 一半 |
 
 ### 1.2 确实还没有的（实测命令）
 
 | 缺口 | 实测证据 |
 | --- | --- |
 | ~~**Guard / 鉴权**~~ | ✅ 已实现（`src/auth/`）—— 当时 `grep -rn "CanActivate\|APP_GUARD" src/` 是**零命中** |
-| ~~**单元测试**~~ | ⚠️ 部分完成：`jest.json` + `pnpm test` / `test:cov` 已有（`src/auth/__tests__/`、`auth.config.spec.ts`）；覆盖率阈值与更广的覆盖仍缺 |
+| ~~**单元测试**~~ | ⚠️ 部分完成：`jest.json` + `pnpm test` / `test:cov` 已有（原 `src/auth/__tests__/`、`auth.config.spec.ts` 已随测试删除）；覆盖率阈值与更广的覆盖仍缺 |
 | **`strict`** | `npx tsc -p tsconfig.json --noEmit --strict` → **32 个错误**（明细见 §3.3） |
 | **CI** | 无 `.github/` |
 | **序列化层** | `grep -rn "ClassSerializerInterceptor\|@Exclude" src/` → **零命中** |
 | **持久层** | service 直接持有 `Map`；[database.config.ts](../src/config/database.config.ts) 只是预留契约 |
-| **平台层接线** | `helmet()` 已挂（[main.ts:28](../src/main.ts#L28)）；CORS / 限流 / shutdown hooks / 全局前缀 / 版本控制**都没接** |
+| **平台层接线** | ✅ CORS / 限流 / shutdown hooks 已接（`src/platform/` + [main.ts](../src/main.ts)）；⬜ 全局前缀 / 版本控制 / body limit 仍未接 |
 | **格式化检查** | 只有 `pnpm format`（会改文件），没有 `--check` |
 
 ---
@@ -76,15 +76,15 @@ grep -c '^- \[ \]' docs/learning-next.md   # 未完成
 ### 2.1 读代码地图（按依赖顺序读，约 2 小时）
 
 ```text
-packages/api-contract/src/index.ts        ← 先看"契约长什么样"（纯类型）
+src/system/http-contract/index.ts         ← 先看"契约长什么样"（纯类型）
   ↓
-src/contract/response/response-contract.ts ← 信封的类型与不变量
-src/contract/response/response-envelope.interceptor.ts ← map() + 幂等 + 提前放行
+src/system/http-response/response-contract.ts ← 信封的类型与不变量
+src/system/http-response/response-envelope.interceptor.ts ← map() + 幂等 + 提前放行
   ↓
-src/contract/validation/error-code.ts      ← 编译期穷尽性断言（§2.2 的重点）
-src/contract/validation/http-exception.filter.ts ← 所有异常的唯一出口
+（error-code.ts 已删除：本仓库移除了 `code` 字段）
+src/system/http-validation/http-exception.filter.ts ← 所有异常的唯一出口
   ↓
-src/contract/api-contract.module.ts        ← 谁注册了什么、顺序如何（§2.10 的答案）
+src/http-enhancers.module.ts               ← 谁注册了什么、顺序如何（§2.10 的答案）
   ↓
 src/app.module.ts                          ← 配置 → 契约 → 业务 的组装顺序
 src/main.ts                                ← 入口只做五件事
@@ -92,16 +92,15 @@ src/main.ts                                ← 入口只做五件事
 
 ### 2.2 练习任务
 
-- [ ] 画出 [api-contract.module.ts:60-72](../src/contract/api-contract.module.ts#L60-L72) 的注册表，
+- [ ] 画出 [http-enhancers.module.ts:60-72](../src/http-enhancers.module.ts#L60-L72) 的注册表，
       标出**每一项属于请求链路的哪一层**，与 [nestjs-learning-plan.md](nestjs-learning-plan.md) §2.10 的图逐行对齐。
-- [ ] 解释 [error-code.ts:40-46](../src/contract/validation/error-code.ts#L40-L46) 那段
-      `UncoveredErrorCode extends never ? true : never` 断言：**故意**往
-      `packages/api-contract/src/index.ts` 的 `ErrorCode` 联合里加一个成员、不加值对象，
-      跑 `pnpm build` 看它怎么失败，然后撤销。
-- [ ] 解释 [response-envelope.interceptor.ts](../src/contract/response/response-envelope.interceptor.ts)
+- [ ] ~~解释 `error-code.ts:40-46` 那段 `UncoveredErrorCode extends never ? true : never` 断言：
+      **故意**往 `ErrorCode` 联合里加一个成员、不加值对象，跑 `pnpm build` 看它怎么失败，然后撤销。~~
+      （已删除：本仓库移除了 `code` 字段与 `ErrorCode`。）
+- [ ] 解释 [response-envelope.interceptor.ts](../src/system/http-response/response-envelope.interceptor.ts)
       为什么"包过就不再包"是**必须**的（提示：backlog §1.1 的双重信封实测）。
 - [ ] 解释为什么 `@RawBody()` 是**参数级**豁免而不是 DTO 类型级标记
-      （[raw-body.decorator.ts](../src/contract/validation/raw-body.decorator.ts)）。
+      （[raw-body.decorator.ts](../src/system/http-validation/raw-body.decorator.ts)）。
 - [ ] 回答 [nestjs-learning-plan.md:1076-1097](nestjs-learning-plan.md#L1076-L1097) 的 20 道自测题，
       答不上的记下来，只补那些。
 
@@ -137,13 +136,13 @@ src/main.ts                                ← 入口只做五件事
    `PERMISSION_DENIED` / `RESOURCE_NOT_FOUND` 两个 `code`，新增 JWT 登录模块。
    旧实现可从 git 历史（提交 `33d8dc4`）取回。
 
-**还剩的部分**：限流 / 防撞库（`ThrottlerGuard`）与平台模块一起做 —— 见 §4，
-那时会一起补 `TOO_MANY_REQUESTS` 这个 `ErrorCode`；角色 / 权限属于"授权层"，
+**还剩的部分**：限流 / 防撞库（`ThrottlerGuard`）已随 `src/platform/` 落地（见 §4），
+429 也已经进契约；角色 / 权限属于"授权层"，
 触发条件写在 `docs/authentication.md` §10。
 
 ```bash
 # 现在的验收
-pnpm test && pnpm test:e2e
+pnpm test && pnpm test:e2e          # ⚠️ 测试已全部删除，这两条当前是红的（见 README §测试）
 TOKEN=$(curl -s -X POST localhost:3000/auth/login -H 'content-type: application/json'   -d '{"username":"neo","password":"matrix"}' | node -pe "JSON.parse(require('fs').readFileSync(0)).data.accessToken")
 curl -s -H "authorization: Bearer $TOKEN" localhost:3000/auth/profile   # 200 {sub,username}
 curl -i localhost:3000/auth/profile                                     # 401 + WWW-Authenticate + traceId
@@ -155,7 +154,7 @@ curl -i localhost:3000/auth/profile                                     # 401 + 
 
 📖 [Unit testing](https://docs.nestjs.com/fundamentals/unit-testing) · 对应计划 §4 · backlog §3.2
 
-**为什么**：原来所有东西都靠 e2e 端到端验证，跑一次要起应用；一个纯函数（`codeOfConstraint`）
+**为什么**：原来所有东西都靠 e2e 端到端验证，跑一次要起应用；一个纯函数（`codeOfConstraint`，已随错误码删除）
 出错也得靠发 HTTP 才能发现，而且 `pnpm test` **直接失败**。
 
 **已经做完的**（随 §3.1 一起落地）：
@@ -164,14 +163,14 @@ curl -i localhost:3000/auth/profile                                     # 401 + 
       [jest-e2e.json](../jest-e2e.json) 同一套别名。`\.spec\.ts$` 不会误伤 `*.e2e-spec.ts`
       （`spec` 前面是 `-` 不是 `.`），两条测试道天然隔离。
 - [x] `package.json` 加了 `"test"` / `"test:cov"`。
-- [x] 用**假 `ExecutionContext`**（`src/auth/__tests__/fixtures/`）+ **真的 `JwtService`**
+- [x] 用**假 `ExecutionContext`**（原 `src/auth/__tests__/fixtures/`，已删除）+ **真的 `JwtService`**
       写了一批守卫单测；e2e 用应用自己的默认开发密钥端到端跑登录 → token → 受保护路由。
 
 **还差的**：
 
 - [ ] 给覆盖率加**阈值**（防止悄悄下降）。
 - [ ] 补齐 backlog §3.2 点名的三个"最该被钉住"的单测：
-      - [ ] `codeOfConstraint` 的映射（含未登记约束 → `UNKNOWN_CONSTRAINT`）；
+      - [ ] ~~`codeOfConstraint` 的映射（含未登记约束 → `UNKNOWN_CONSTRAINT`）~~（已删除：本仓库移除了 `code` 字段）；
       - [ ] `AppExceptionFilter` 对**数组型 `message`** 的规范化（backlog §1.3 的回归）；
       - [ ] `isSwaggerEnabled`（现在是靠 e2e 顺带测的，本质是纯函数）。
 - [ ] 清掉文档里的失效引用（backlog §3.2 列了 5 处，例如 `plain-webhook.dto.ts` 指向不存在的
@@ -202,7 +201,7 @@ pnpm test:e2e      # 仍然全绿
 
 | 文件 | 条数 | 主要错误码 | 修法 |
 | --- | --- | --- | --- |
-| `src/swagger/__tests__/openapi.e2e-spec.ts` | 11 | TS18048 / TS2532 / TS2769 / TS7053 | 局部 `??=`、收窄后断言、修 `expect` 的重载、给索引访问补类型 |
+| `src/swagger/__tests__/openapi.e2e-spec.ts`（已删除） | 11 | TS18048 / TS2532 / TS2769 / TS7053 | 局部 `??=`、收窄后断言、修 `expect` 的重载、给索引访问补类型 |
 | `dto/webhook-response.dto.ts` | 6 | TS2564 | 明确赋值断言 `!` |
 | `user.dto.ts` | 5 | TS2564 | 同上 |
 | `dto/webhook.dto.ts` / `dto/create-user.dto.ts` | 3 / 3 | TS2564 | 同上 |
@@ -217,7 +216,7 @@ pnpm test:e2e      # 仍然全绿
 
 - [ ] 按上表修完 33 处，`tsconfig.json` 打开 `"strict": true`，`pnpm build` + `pnpm test` + `pnpm test:e2e` 全绿。
       （`src/auth/**` 已经按 `strict` 写，不用返工。）
-- [ ] 加 `"format:check": "prettier --check \"src/**/*.ts\" \"packages/**/*.ts\""`。
+- [ ] 加 `"format:check": "prettier --check \"src/**/*.ts\""`。
 - [ ] `package.json` 加 `"packageManager": "pnpm@<当前版本>"` 固定包管理器。
 - [ ] 新建 `.github/workflows/ci.yml`：`pnpm install --frozen-lockfile` → `lint` → `format:check`
       → `build` → `test` → `test:e2e`。
@@ -229,6 +228,11 @@ pnpm test:e2e      # 仍然全绿
 
 ## 4. T2 · 接线即生效：`PlatformModule`（成本最低的一项）
 
+> **状态**：**CORS 与限流 ✅ 已实现**（`src/platform/`）。本模块剩下的
+> 全局前缀 / 版本控制 / body limit 仍未做 —— 见下面的「还差的」。
+> shutdown hooks 那一项**也早已完成**（当时漏勾）：`main.ts` 已调 `enableShutdownHooks()`，
+> `LoggingModule` 实现了 `OnApplicationShutdown`（实测 `Ctrl+C` 会打 `shutting down` 并 flush 日志）。
+
 📖 [CORS](https://docs.nestjs.com/security/cors) ·
 [Helmet](https://docs.nestjs.com/security/helmet) ·
 [Rate limiting](https://docs.nestjs.com/security/rate-limiting) ·
@@ -237,37 +241,78 @@ pnpm test:e2e      # 仍然全绿
 
 **为什么成本最低**：`cors` / `throttle` 的**配置契约、默认值、启动期校验已经写好了**
 （[platform.config.ts](../src/config/platform.config.ts)），只是"没有消费者"。
-你只要读配置并接线，配置立刻从"预留"变"生效"。
+读配置并接线后，配置立刻从"预留"变"生效"。
 
-**练习任务**
+### 4.1 ✅ 已落地（读代码 + 对照下面的"偏差"）
 
-- [ ] 新建 `src/platform/platform.module.ts`，职责只放**平台层**（不塞进 `ApiContractModule`）：
-      CORS、限流、shutdown hooks、全局前缀、版本控制。
-- [ ] `app.enableCors({ origin: resolved.cors.origins, credentials: true })`，
-      用 `curl -H 'Origin: http://example.com' -i` 观察 `Access-Control-Allow-Origin`。
-- [ ] 装 `@nestjs/throttler` 并接线：`ThrottlerModule.forRootAsync({ inject: [ConfigService], ... })`
-      + `{ provide: APP_GUARD, useClass: ThrottlerGuard }`；
-      把 `THROTTLE_LIMIT=3` 写进 `.env`，`for i in {1..5}` 打，第 4 次应 **429**。
-      - ⚠️ 装包前先确认 CJS 兼容性——`@nestjs/config` 就栽在 12.x 是 ESM-only（见 README 的踩坑记录）。
-      - ⚠️ 429 也要进 `@ApiEnvelopeErrors()`，并且要给 `ErrorCode` 加 `TOO_MANY_REQUESTS`
-        （契约的两个文件都要加：共享联合类型 + 服务端值对象，编译期断言会提醒你）。
-      - ⚠️ `ThrottlerGuard` 也是 `APP_GUARD`：注册在 `AuthModule` **之后**，
-        这样「没认证」优先于「请求太频繁」。
-- [ ] `app.enableShutdownHooks()`，在一个 provider 上实现 `OnApplicationShutdown`，
-      `Ctrl+C` 验证钩子被触发（不加这一行就不会触发——亲手验证一次）。
-- [ ] **接线完成后**：删掉 [describe-config.ts:27-31](../src/config/describe-config.ts#L27-L31)
-      `RESERVED_NAMESPACES` 里对应的项——那行启动日志是用来告诉你"哪些配置在空转"的，
-      接完线不删它就变成假信息。
-- [ ] 全局前缀 + URI 版本（`setGlobalPrefix('api')` + `enableVersioning`）：
-      **先想清楚代价**——前端路径全变、`openapi/openapi.json` 必须重生成、已有 e2e 路径全改。
-      建议单独一个提交，做完立刻跑 `pnpm openapi:export`。
+- [x] 新建 [platform.module.ts](../src/platform/platform.module.ts)，职责只放**平台层**
+      （不塞进 `ApiContractModule`）。
+      **偏差**：CORS 的**接线点不在模块里** —— `cors` 包不是本仓库的直接依赖
+      （只随 `@nestjs/platform-express` 传递安装），pnpm 的严格 node_modules 下 `src/` 里
+      `import 'cors'` 会直接失败；而 `app.enableCors()` 由 Nest 自己 `require` 它。
+      所以模块只**提供选项**（`PLATFORM_OPTIONS`），入口调
+      `app.enableCors(resolvePlatformOptions(app).cors)` —— 与
+      `setupSwagger(app, resolveApiDocsOptions(app))` 是同一套「入口只取不拼」。
+- [x] CORS 由 `CORS_ORIGINS` 生效（[platform.options.ts](../src/platform/platform.options.ts) 的 `toCorsOptions()`）。
+      **偏差**：`credentials` **不是**恒 `true` —— 浏览器规范禁止
+      `Access-Control-Allow-Origin: *` 与 `Access-Control-Allow-Credentials: true` 共存，
+      所以通配模式 `credentials: false`、显式白名单模式 `credentials: true`。
+      生产环境用 `*` 现在**拒绝启动**（`findCrossFieldProblems()`；原先只是一句告警，
+      `env.ts` 的注释里写明了"A2 接上后升级为致命"——这次兑现了）。
+- [x] 装 `@nestjs/throttler`（**v6.7.1，CJS 兼容**：`main: dist/index.js`，`require()` 实测可用）
+      并接线 `ThrottlerModule.forRootAsync({ inject: [ConfigService] })` + `APP_GUARD`；
+      `THROTTLE_LIMIT=3` 时第 4 次 429（实测 `200 200 200 429 429`）。
+      三个坑都踩到了：`ttl` 单位是**毫秒**（配置层是秒，映射处 `× 1000`）、
+      默认文案把库名写进契约（换成 `Too many requests, please try again later`）、
+      `ThrottlerGuard` 必须排在 `AuthModule` **之后**。
+- [x] 429 进 `@ApiEnvelopeErrors()`。**落在类级**（不是某条路由）：限流是全局守卫，
+      每条路由都可能 429，写在类上不撒谎；`openapi.json` 已重生成。
+- [x] 从 [describe-config.ts](../src/config/describe-config.ts) 的 `RESERVED_NAMESPACES` 删掉
+      `cors` / `throttle`（现在只剩 `database`）—— 启动摘要里那两个 `(预留)` 后缀已消失。
 
-**验收**
+### 4.2 ⚠️ 接线时暴露出的两个**取舍**（值得记住，不是 bug）
+
+1. **401 与 429 谁先**：两个 `APP_GUARD` 按模块注册顺序短路。本仓库把 `PlatformModule`
+   排在 `AuthModule` 之后 ⇒「没认证」优先于「请求太频繁」。
+   **代价**：被认证守卫拒绝的请求**不计入限流** —— 拿无效 token 刷受保护路由不受限流约束。
+   触发条件（真要做 DoS 防护）时把 `PlatformModule` 移到 `AuthModule` 之前即可。
+2. **限流是按 handler 分桶的**（`ThrottlerGuard` 默认 key 含控制器与方法名）：
+   把 `/users/1` 打到 429 之后，`/users` 列表**仍然可用**。这既是优点（一个热点端点
+   不会拖垮全站），也意味着"全局限流"并不等于"总配额"。
+
+### 4.3 还差的（本模块剩下的部分）
+
+- [ ] `setGlobalPrefix('api')` + `enableVersioning({ type: VersioningType.URI })`：
+      **先想清楚代价** —— 前端路径全变、`openapi/openapi.json` 必须重生成、文档里所有
+      curl 示例都要改。建议单独一个提交，做完立刻跑 `pnpm openapi:export`。
+- [ ] 请求体上限显式化（默认 100kb 已有，但应显式 `json({ limit: '100kb' })`）。
+- [ ] 可选：给 `/auth/login` 单独加更严的 `@Throttle()`（撞库比普通读接口更敏感）。
+
+**验收（已实测的部分）**
 
 ```bash
-for i in 1 2 3 4 5; do curl -s -o /dev/null -w "%{http_code}\n" localhost:3000/api/v1/validation-demo/users; done
+# 基线：THROTTLE_LIMIT=3 启动
+pnpm build && PORT=3010 THROTTLE_LIMIT=3 node dist/main
+
+B=http://localhost:3010
+# 限流：必须打 **@Public() 的路由** —— 受保护路由会先被认证守卫拦成 401，永远到不了限流器
+for i in 1 2 3 4 5; do curl -s -o /dev/null -w "%{http_code} " $B/validation-demo/users/1; done
 # → 200 200 200 429 429
-curl -s -D - -o /dev/null localhost:3000/ | grep -i 'strict-transport\|x-powered\|access-control'
+curl -s -D - -o /dev/null $B/validation-demo/users/1 | grep -i 'retry-after\|x-ratelimit'
+# → Retry-After: 60 / X-RateLimit-*
+
+# CORS（通配模式：仅开发）
+curl -s -i -X OPTIONS $B/validation-demo/users -H 'Origin: http://example.com' \
+  -H 'Access-Control-Request-Method: GET' | grep -i 'access-control'
+# → Allow-Origin: * / Allow-Methods / Allow-Headers / Expose-Headers
+
+# CORS（白名单模式：带凭证 + Vary: Origin）
+CORS_ORIGINS='https://app.example.com' PORT=3010 node dist/main
+curl -s -i -H 'Origin: https://app.example.com' $B/validation-demo/users \
+  | grep -i 'access-control-allow-origin\|allow-credentials\|vary'
+
+# 生产规则：通配来源必须拒绝启动
+NODE_ENV=production node dist/main; echo "exit=$?"   # → 1 + 多行问题清单
 ```
 
 ---
@@ -287,6 +332,11 @@ curl -s -D - -o /dev/null localhost:3000/ | grep -i 'strict-transport\|x-powered
 **触发条件**：只要有任何一个字段不该给客户端，就立刻做，别等。
 
 ### 5.2 Repository 端口（上 DB 前最低成本的前置）
+
+> 📖 **不会 SQL / 从没装过数据库**的人先读
+> [`docs/database-learning-plan.md`](database-learning-plan.md)：那是这份计划的**前置补课**
+> （SQL → 建模与约束 → 事务与并发 → 再回到这里的 §5.1）。
+> 本节与下面的 §5.3–§5.5 **必须**按顺序做，不能跳到 ORM。
 
 - [ ] 抽 `UsersRepository` **接口 + DI token**（`Symbol`），写出内存适配器，
       service 改成注入 token 而不是自己 `new Map`。
@@ -308,27 +358,30 @@ curl -s -D - -o /dev/null localhost:3000/ | grep -i 'strict-transport\|x-powered
       也是理解 `Observable` 与 `Interceptor` 关系的最短路径。
 - [ ] 实测 `@Sse()` 与响应信封的兼容性（已有实现里 `@Sse()` 被提前放行，验证一下真的没被包）。
 
-### 5.4 结构化日志
+### 5.4 ✅ 结构化日志 —— 已实现
 
-📖 [Logger](https://docs.nestjs.com/techniques/logger) · backlog §3.6
+📖 [Logger](https://docs.nestjs.com/techniques/logger) · backlog §3.6 ·
+**完整说明见 [`docs/logging.md`](logging.md)**
 
-- [ ] 把仓库里剩余的 `console.log` 换成 `Logger`（当前有一处在
-      [validation-demo.controller.ts](../src/modules/validation-demo/validation-demo.controller.ts) 的未提交改动里）。
-- [ ] 用 `app.useLogger()` 挂一个自定义实现，或直接评估 `nestjs-pino`：
-      生产输出 JSON、本地 pretty、日志里自动带 `requestId`——与已有的 `traceId` 是同一件事。
+- [x] `console.*` 零残留，并加了 `no-console: error` 规则把它变成**可执行约束**。
+- [x] `LoggingModule` + `installLogger()` 接管全局 logger：NDJSON、自动带 `traceId` / `userId`、
+      敏感键脱敏；**同时写入本地滚动文件**（`logs/app.log`，按大小/跨天滚动、保留 N、失败降级）；
+      访问日志中间件（状态码决定级别）；`enableShutdownHooks` + `onApplicationShutdown` flush。
+- [ ] 换 `nestjs-pino` 的**触发条件**：需要采集器（Loki/ELK）、访问日志采样或多输出目标时
+      （字段规范与测试布局可照搬，注意"别搞两套请求 id"）。
 
 ### 5.5 OpenAPI 的长期维护（契约测试的完整形态）
 
 📖 backlog §2.6 / §3.7 · 计划 §5.6
 
 - [x] `setup-swagger.ts` 导出 `buildDocument()`，让 `setupSwagger()` 和
-      文档测试**共用同一个构建函数**（已做；文档测试也搬到了 `src/swagger/__tests__/openapi.e2e-spec.ts`）。
+      文档测试**共用同一个构建函数**（已做；文档测试原在 `src/swagger/__tests__/openapi.e2e-spec.ts`，已删除）。
 - [ ] CI 里把 `GET /docs-json` 落成 `openapi/openapi.json` 并提交，
       用 `oasdiff` 检测**破坏性变更**（字段删除、类型收紧）。
 - [ ] 加一条守卫：**每条路由都必须有 2xx 与类级失败响应**——新加路由忘挂
       `@ApiOkEnvelope` 时立刻红。这条正是 §3.2 里 `webhooks/body` 盲区的通用解。
 - [ ] 用 `openapi-typescript` 从 `/docs-json` 生成客户端类型，
-      让 `packages/api-contract` 那份手写契约与生成产物**对得上**——
+      让 `src/system/http-contract` 那份手写契约与生成产物**对得上**——
       这是 backlog §2.7「契约类型无法共享给前端」的收尾。
 
 ---
@@ -337,7 +390,7 @@ curl -s -D - -o /dev/null localhost:3000/ | grep -i 'strict-transport\|x-powered
 
 | 主题 | 什么时候学 |
 | --- | --- |
-| Database / TypeORM / Prisma / Mongoose | **先做 §5.2 的 Repository 端口**，再学 ORM（届时只需学映射 + 事务） |
+| Database / TypeORM / Prisma / Mongoose | **先做 §5.2 的 Repository 端口**，再学 ORM（届时只需学映射 + 事务）；完全零基础就先走 [`database-learning-plan.md`](database-learning-plan.md) 的四周 |
 | GraphQL | 需要 schema-first 接口时 |
 | WebSockets（`@Sse()` 之外） | 需要双向推送时 |
 | Microservices | 拆服务时 |
@@ -355,15 +408,15 @@ curl -s -D - -o /dev/null localhost:3000/ | grep -i 'strict-transport\|x-powered
 | --- | --- | --- | --- |
 | **迭代 1**（半天） | 回收层 §2 + 清掉未提交改动 | 一段说得清的"请求链路自述" | 20 道自测题 ≥ 17 对 |
 | **迭代 2**（1–2 天） | §3.2 测试基座 + §3.3 `strict`/CI | `jest.json`、5 条单测、`strict: true`、CI 文件 | `pnpm test` / `build` / CI 全绿 |
-| **迭代 3**（1 天） | ✅ §3.1 认证（已实现，最终形态是 JWT） + §4 平台模块 | `src/platform/`、429 进契约、`RESERVED_NAMESPACES` 清空 | 见下方"迭代 3 的验收" |
+| **迭代 3**（1 天） | ✅ §3.1 认证（已实现，最终形态是 JWT） + ✅ §4 的 CORS/限流 | `src/platform/`、429 进契约、`cors`/`throttle` 从 `RESERVED_NAMESPACES` 移除 | 见 §4.3 的实测命令 |
 | **迭代 4**（按需） | §5 逐个触发 | 序列化层 / Repository 端口 / 缓存 / SSE / `openapi.json` 快照 | 各自章节的验收 |
 
 **顺序理由**：迭代 2 先做，是因为**后面每一步都要靠它兜底**——Guard 和限流都要改
-`ErrorCode` 联合类型，而 `strict` 与单测让这次改动可控。
+`ErrorCode` 联合类型（现已随 `code` 字段移除），而 `strict` 与单测让这次改动可控。
 
 > 实际发生的顺序略有不同：**§3.1（权限验证）先做了**，并顺手落地了单测基建的那一半
 > （`jest.json` + `pnpm test`）。所以现在剩下的是 §3.2 的收尾（覆盖率阈值 + 三个点名单测）、
-> §3.3（`strict` + CI）与 §4（平台模块，其中 429 需要再动一次 `ErrorCode`）。
+> §3.3（`strict` + CI）与 §4（平台模块；其中 429 原本要再动一次 `ErrorCode`，现已随 `code` 字段移除）。
 
 ---
 
@@ -420,11 +473,13 @@ pnpm test && pnpm test:cov && pnpm build
 B=http://localhost:3000
 # 认证（已完成）
 curl -s -X POST $B/auth/login -H 'content-type: application/json' -d '{"username":"neo","password":"matrix"}'
-curl -i $B/auth/profile                                            # 401 UNAUTHENTICATED + WWW-Authenticate + traceId
+curl -i $B/auth/profile                                            # 401 + WWW-Authenticate + traceId
 curl -s -H "authorization: Bearer $TOKEN" $B/auth/profile          # 200 {sub,username}
-# 平台层（待做）
-for i in 1 2 3 4 5; do curl -s -o /dev/null -w "%{http_code}\n" $B/auth/profile; done   # 末两位 429
-curl -s -D - -o /dev/null $B/ | grep -i 'x-powered\|strict-transport'   # 无 X-Powered-By
+# 平台层（✅ 已接线；注意用的是 @Public() 路由，受保护路由先被 401 拦下）
+for i in 1 2 3 4 5; do curl -s -o /dev/null -w "%{http_code}\n" $B/validation-demo/users/1; done   # 末两位 429（需 THROTTLE_LIMIT=3）
+curl -s -D - -o /dev/null $B/validation-demo/users/1 | grep -i 'retry-after\|x-ratelimit'          # 限流响应头
+curl -s -i -H 'Origin: http://example.com' $B/validation-demo/users | grep -i 'access-control'      # CORS 头
+curl -s -D - -o /dev/null $B/validation-demo/users | grep -i 'x-powered\|strict-transport'         # 无 X-Powered-By
 ```
 
 ---

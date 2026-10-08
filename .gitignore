@@ -121,6 +121,8 @@ artifacts/
 *.tmp
 *.tmp_proj
 *.log
+# 日志目录（本仓库的日志落在 logs/，滚动文件如 app.1.log 未必匹配 *.log）
+logs/
 *.vspscc
 *.vssscc
 .builds
@@ -230,12 +232,11 @@ PublishScripts/
 #!**/[Pp]ackages/repositories.config
 # NuGet v3's project.json files produces more ignorable files
 
-# ⚠️ 上面那条 `**/[Pp]ackages/*` 来自 VisualStudio 模板，会连本仓库的 workspace 成员一起吞掉
-# （`packages/api-contract` 是**要入库**的共享契约包）。gitignore 的规则是"父目录被排除就不再
-# 向下遍历"，所以必须先把它自己 negate 回来；它的子文件不再匹配上面那条（那个 `*` 不跨 `/`）。
-!packages/api-contract/
-# 但构建产物仍然要忽略。
-packages/api-contract/dist/
+# 历史：本仓库曾有一个要入库的 workspace 成员 `packages/api-contract`，
+# 需要在上面那条 `**/[Pp]ackages/*`（VisualStudio 模板）之后 negate 回来。
+# 项目改为纯单后端后该包已删除，那两条 negate 规则也随之移除。
+# 保留这段注释是为了说明：`**/[Pp]ackages/*` 仍然生效，
+# 所以**将来若再加仓库内的 packages 目录，记得在这里 negate**。
 *.nuget.props
 *.nuget.targets
 
@@ -410,3 +411,32 @@ dist
 .webpack
 .serverless/**/*.zip
 .pnpm-store
+
+# ── 防止"编译产物落回源码目录"（本仓库真实发生过一次）─────────────────────────────
+#
+# 现象：`src/` 下出现 78 个 `.js` + 78 个 `.js.map`，结构与 `src/` 完全镜像 ——
+# 那是某次 `tsc` 调用被喂了**错误的 outDir/rootDir**（构建脚本的 tsconfig 曾经临时不含
+# `noEmit`），把 `src/` 当成了输出目录。
+#
+# 为什么必须挡住它（不只是"看着脏"）：
+#   - Node/jest 解析 `./foo` 时**优先命中 `foo.js`** ⇒ `pnpm start:dev` 会静默跑编译产物，
+#     源码改了却不生效，且没有任何报错；
+#   - `.js` 是未跟踪文件，会在每次 `git status` 里刷屏，掩盖真正的改动。
+#
+# 这些规则匹配的是**编译产物的形态**：`foo.ts` → `foo.js` / `foo.js.map` / `foo.d.ts`。
+# 写法上把 `*` 重复两次（`foo.js` 形式）而不是 `**`，刻意收窄一点。
+#
+# ⚠️ 已知代价：`src/` 是「只放 `.ts`」的目录，所以如果你往 `src/` 放一个手写的 `.js`
+# （或手写的 `.d.ts`），它会被这里忽略掉。这不是我们想要的语义，但 gitignore **做不到**
+# "仅当存在同名 `.ts` 时才忽略"。取舍是：宁可挡住"整目录镜像"的编译产物 ——
+# 它真实发生过、且会静默改变运行时行为 —— 也不要为了极罕见的手写 `.js` 留口子。
+# 真要放，用 `git add -f`。
+src/**/*.js
+src/**/*.js.map
+src/**/*.d.ts
+src/**/*.d.ts.map
+scripts/**/*.js
+scripts/**/*.js.map
+scripts/**/*.d.ts
+scripts/**/*.d.ts.map
+*.tsbuildinfo

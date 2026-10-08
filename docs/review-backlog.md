@@ -1,20 +1,37 @@
 # 复盘与优化清单（Review & Improvement Backlog）
 
+> ⚠️ **本文件是历史记录，部分内容已被后续决策**反向**。**
+>
+> 最近一次后端化改造做了三件与本清单直接冲突的事，读的时候请带着这个前提：
+>
+> | 改造 | 与本清单的冲突 |
+> | --- | --- |
+> | **删除了 `code` 字段** | §2.2 整节在论证「`code` 是投入产出比最高的一项、应该现在加」。**决策反转了**：`code` 被移除，代价是"同状态码下不同失败原因无法机器区分" —— 详见 [`docs/validation.md`](validation.md) §9.6 与 `README` §"响应契约" |
+> | **删除了 `packages/api-contract`（共享契约包）** | §2.7 与 §9 的"契约包 + 客户端类型生成"方案已作废：项目改为纯后端，线上形状内联在 `src/system/http-contract/` |
+> | **删除了全部测试** | 表中多处写的「✅ 已修复 + 回归用例」**不再成立** —— 那些用例已被删除，详见 `README` §"测试" |
+>
+> 目录也从 `src/contract/` 重组为 `src/system/http-*`（见 [`docs/architecture-review.md`](architecture-review.md) §4）。
+> 本清单的**分析过程与实测证据仍然有效**（"问题是怎么被发现的"这部分很有价值），
+> 但凡是"建议做 X"的结论，请先对照上面三条。
+
 > **状态更新（同一仓库内已实施）**
 >
 > | 范围 | 状态 |
 > | --- | --- |
-> | §1 P0（幂等信封 / null 语义 / 过滤器规范化 / 归一化） | ✅ 已修复 + 回归用例 |
-> | §2 P1（`location` / `code` / `traceId` / `ErrorDetail` 解耦 / options token + `forRootAsync`（现已由 `AppModule` 从配置消费）/ `buildDocument` 单源 / 共享契约包） | ✅ 已修复 + 回归用例 |
+> | §1 P0（幂等信封 / null 语义 / 过滤器规范化 / 归一化） | ✅ 已修复（⚠️ 回归用例已随测试清理删除） |
+> | §2 P1（`location` / `traceId` / `ErrorDetail` 解耦 / options token + `forRootAsync`（现已由 `AppModule` 从配置消费）/ `buildDocument` 单源） | ✅ 已修复（⚠️ `code` 部分**已反转**，见上；回归用例已删除） |
+> | §2.7 共享契约包 | ❌ **已作废**（包已删除，类型内联） |
 > | §3.4 配置层 | ✅ 已修复（`src/config/`，见 [`docs/configuration.md`](configuration.md)） |
-> | §3 其余（`strict` / 单测 / CI / 平台模块 / 日志 / OpenAPI CI） | ⬜ 未做 |
-> | §4 P3（Guard / Repository / 分页演进 / 序列化层） | ⬜ 未做 |
+> | §3.6 日志 | ✅ 已修复（`src/observability/`，见 [`docs/logging.md`](logging.md)） |
+> | §3.5 平台层 · CORS + 限流 + 优雅退出 | ✅ 已修复（`src/platform/`；**前缀 / 版本 / body limit 仍未做**） |
+> | §3 其余（`strict` / 单测 / CI / OpenAPI CI） | ⬜ 未做 |
+> | §4 P3（Guard / Repository / 分页演进 / 序列化层） | ⬜ 未做（**Guard 已由 §3.1 的 `AuthModule` 覆盖**） |
 >
 > 下面的正文保留**当时的分析原样**（包括"修复前"的现象与实测输出），
 > 作为"问题是怎么被发现、怎么被验证"的记录；实现说明见
 > [`docs/configuration.md`](configuration.md)、[`docs/validation.md`](validation.md) 与 [`README.md`](../README.md)。
 
-> 对象：本仓库 `src/contract/`、`src/swagger/`、`src/config/`、`src/modules/validation-demo/` 四个**已实现**模块。
+> 对象：本仓库 `src/system/`（原 `src/contract/`）、`src/swagger/`、`src/config/`、`src/modules/validation-demo/` 四个**已实现**模块。
 > 方法：通读源码 + 文档 + e2e，然后在真实进程上做边界探测（`node dist/main` + `curl`）。
 > 原则：只写**能复现**的问题，每条给出「现象 → 根因 → 社区对照 → 方案 → 验收」。
 > 已经写明「有意没做」的事（`docs/validation.md` §7 / §9.6）不重复建议，只在触发条件到了的地方提醒排期。
@@ -204,10 +221,29 @@ export class ContractValidationPipe extends ValidationPipe {
 `ErrorDetail` 加 `location: 'body' | 'query' | 'param'`（信封 schema 与 `ENVELOPE_COMPONENT_SCHEMAS` 同步，
 §2.4 会让这件事只改一处）。这是**兼容性增量**：只加字段、不改语义，`code`（§2.2）一起加最划算。
 
-### 2.2 缺 `code`：文档已自认是「最明显缺口」，建议现在就加 🟠
+### 2.2 缺 `code`：文档已自认是「最明显缺口」，建议现在就加 🟠 —— ❌ **已反向决策：`code` 最终被删除**
+
+> **⚠️ 本节结论已被推翻，保留原文仅作为分析记录。**
+>
+> 当时的建议是「加 `code`」，并且确实**实施过**（`ErrorCode` 值对象 + 27 条约束名映射 +
+> 编译期穷尽性断言 + `errors[].code`）。但在后续的后端化改造中，
+> **`code` 被整体移除**，理由与代价如下：
+>
+> - **移除的收益**：错误契约只剩 `{ success, error, message, traceId?, errors[] }` 一个形状；
+>   少了 `ErrorCode` 值对象 / 约束名映射表 / 穷尽性断言 / `isErrorCode` 边界校验这一整块代码；
+>   也不必再维护"枚举取值来自契约层"这条同步关系。
+> - **付出的代价（真实且已知）**：同一状态码下的不同失败原因**无法再机器区分**。
+>   最典型的是 404 —— 业务「用户不存在」与框架「路由未匹配」的响应体**结构完全相同**，
+>   只剩 `message` 文案不同。而让客户端 parse 文案，正是下面这段分析（以及 AIP-193）警告的反模式。
+> - **现在的约定**：`error`（HTTP 状态短语）是唯一的大类判据；业务侧应让 `message` 说清是哪一种失败，
+>   但**不得**把 `message` 当作稳定的机器契约。
+> - **若将来要恢复区分能力**：加回的就是 `code` 这个字段，**不要**靠约定 `message` 前缀。
+>
+> 完整的现状描述见 [`docs/validation.md`](validation.md) §9.6 与 `README` 的「响应契约」一节。
+> 本节下面关于"为什么 `code` 有价值"的分析**依然成立** —— 它恰好解释了上面那笔代价。
 
 `docs/validation.md` §9.6 的分析是对的（AIP-193：一旦客户端开始 parse `message`，文案就变成契约）。
-补两点**落地建议**：
+补两点**落地建议**（⚠️ 已被上面的反向决策取代，仅存档）：
 
 - 不要直接暴露 class-validator 的约束名（`isInt` / `min` 是库细节，换 Zod 就全变）。
   自定义一套 `ErrorCode` 枚举，在 `exceptionFactory` 里做**约束名 → code** 的映射；
@@ -241,7 +277,12 @@ export class EmailAlreadyExistsException extends ApiException {
 
 ### 2.4 `ErrorDetail` 的 Swagger 依赖与文档自相矛盾 🟡
 
-事实核查：
+> **现状（已解决）**：`ErrorDetail` 现在是 `src/system/http-contract/index.ts` 里的**纯 interface**
+> （零 `@nestjs/swagger` 依赖），OpenAPI 投影只在 `src/swagger/envelope.schema.ts` 手写一份。
+> 本条描述的"两份定义、且 e2e 只断言了 `$ref`"的那个守卫**已随测试删除**，
+> 所以现在改契约形状时**没有自动守卫**提醒你同步两边 —— 改 `http-contract` 时要记得同时改 `envelope.schema.ts`。
+
+事实核查（当时）：
 
 - `docs/validation.md` §9.7 与 `envelope.schema.ts` 的注释都写着「契约层保持**零 Swagger 依赖**」；
 - 但 `src/contract/validation/error-contract.ts` 第 1 行就是 `import { ApiProperty } from '@nestjs/swagger'`，
@@ -290,7 +331,13 @@ static forRootAsync(options: AsyncOptions): DynamicModule { /* useFactory + inje
 测试只保留 `SwaggerModule.setup` 之外的断言。配合 §3.5 的 `openapi.json` 快照，
 文档契约从「按名字断言」升级成「按产物断言」。
 
-### 2.7 契约类型无法共享给前端 🟡
+### 2.7 契约类型无法共享给前端 🟡 —— ❌ **已作废：项目改为纯后端**
+
+> 本条的建议（建 workspace 包共享契约类型）**曾经实施过**（`packages/api-contract`），
+> 但在后端化改造中**整个包被删除**、类型内联进 `src/system/http-contract/`。
+> 理由：项目不再有前端消费者，"两边同时编译失败"的收益消失，而包的成本是真实的
+> （workspace 配置、`build:contract`、tsconfig `paths`/`exclude`、jest 映射、gitignore negate）。
+> 前端要类型请走下面的**生成式**方案（那部分建议仍然有效）。原文存档如下。
 
 `ResponseBody<T>` / `PaginatedResult<T>` / `ErrorBody` 现在只活在服务端仓库里，前端必然手抄一份。
 `pnpm-workspace.yaml` 已经在了，但**没有 `packages:`** —— 加一个 workspace 包是顺路的事：
@@ -300,6 +347,8 @@ packages/api-contract/          # 纯类型 + ErrorCode 枚举，零运行时依
   ├── package.json
   └── src/index.ts
 ```
+
+> ⚠️ 上面这个目录结构**已不存在**，`ErrorCode` 也已删除。前端类型请从 `openapi/openapi.json` 生成。
 
 再配 `openapi-typescript`（或 `orval`）从 `/docs-json` 生成客户端类型，让「信封」这份定义**只有一处**。
 社区成熟项目（Nest 官方 starter 之外的多数生产仓）都是这个组合：契约包 + 生成式客户端。
@@ -358,7 +407,8 @@ DTO 的 `TS2564` 是**框架惯例**，官方示例用**明确赋值断言 `!`**
 **实际落地**（`src/config/`，完整说明见 [`docs/configuration.md`](configuration.md)）：
 
 - 五个 namespace：`app`（已接线：端口/主机）、`swagger`（已接线：启停/serverUrl）、
-  `cors` / `throttle`（🅿️ 预留，A2）、`database`（🅿️ 预留，B1，含连接契约）；
+  `cors` / `throttle`（✅ 已接线：`src/platform/`，见 §3.5 的状态更新）、
+  `database`（🅿️ 预留，B1，含连接契约）；
 - 校验用**已有的 class-validator**（不引 zod/Joi），默认值只在 `read*Config()` 里（单一来源）；
 - `.env.example` 入库、`.gitignore` 补 `.env.*` + `!.env.example`；
 - **一处对原方案的修正**：校验**没有**走 `ConfigModule.forRoot({ validate })`。
@@ -390,6 +440,23 @@ DTO 的 `TS2564` 是**框架惯例**，官方示例用**明确赋值断言 `!`**
 建议这些**不塞进 `ApiContractModule`**（它只管「请求/响应形状」），而单开一个 `PlatformModule`
 （`APP_GUARD` + 中间件 + 全局配置），职责边界更清楚 —— 这也正好是学习计划 §5.8 的落点。
 
+> **状态更新（A2 已实施 `src/platform/`）**
+>
+> | 缺口 | 状态 |
+> | --- | --- |
+> | 缺安全响应头 / 暴露技术栈 | ✅ `helmet()` 已挂，`grep -i x-powered-by` 为空 |
+> | 无 CORS | ✅ `CORS_ORIGINS` → `platformOptionsFactory()` → `app.enableCors()`；**生产环境通配来源拒绝启动** |
+> | 无限流 | ✅ `@nestjs/throttler@6` + `APP_GUARD`；429 已进类级 `@ApiEnvelopeErrors()`；超限带 `Retry-After` / `X-RateLimit-*` |
+> | 无优雅退出 | ✅ `enableShutdownHooks()` + `LoggingModule` 的 `onApplicationShutdown`（实测 `Ctrl+C` 会 flush 日志） |
+> | 无统一前缀 / 版本 | ⬜ 未做（要单独一个提交：重生成 `openapi.json` + 改所有文档示例） |
+> | 请求体不设上限 | ⬜ 未做（默认 100kb 已生效，只是没显式化） |
+> | 无 ETag / 条件请求 | ⬜ 未做 |
+>
+> 与本节原方案的一处偏差：`credentials` **不是**恒 `true` —— 浏览器规范禁止
+> `Access-Control-Allow-Origin: *` 与凭证共存，所以只有显式白名单模式才带凭证
+> （见 `src/platform/platform.options.ts` 的 `toCorsOptions()`）。
+> 未做的部分见 [`docs/learning-next.md`](learning-next.md) §4.3。
+
 ### 3.6 日志仍是默认 `Logger` 🟡
 
 `bootstrap` 的错误处理已经做对了（`Logger.error` + `process.exitCode = 1`，比 starter 强）。缺的是结构化：
@@ -401,6 +468,15 @@ DTO 的 `TS2564` 是**框架惯例**，官方示例用**明确赋值断言 `!`**
 ### 3.7 OpenAPI 的长期维护成本 🟡
 
 现在有三处「手工同步」：`RESPONSE_MODELS`、`ENVELOPE_COMPONENT_SCHEMAS`、`jest-swagger-transformer.js`。
+
+> **状态更新**：`RESPONSE_MODELS` 已经**不再住在 `src/swagger/`** —— 它按业务模块拆成了
+> `FeatureDocs`（`<module>/api-docs.ts`），由 `app.module.ts` 的 `FEATURE_DOCS` 注入
+> （动机与验收见 [`docs/architecture-review.md`](architecture-review.md) §2.1 / §4③）。
+> "手工同步"的**成本没变**，但它现在落在**业务模块自己**身上，而不是文档层 ——
+> 于是新增业务模块不必改 `src/swagger/`，而"漏登记"由两条 e2e 守卫抓
+> （登记的模型必须进 `components.schemas`、每个 tag 必须有描述）。
+> 剩下两处（`ENVELOPE_COMPONENT_SCHEMAS`、`jest-swagger-transformer.js`）未动。
+
 已有的**悬空 `$ref` 通用守卫**是很好的兜底，可以再往前一步：
 
 - CI 里把 `GET /docs-json` 落成 `openapi/openapi.json` 提交，用 `openapi-diff` / `oasdiff`

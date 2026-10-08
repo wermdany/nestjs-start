@@ -56,13 +56,11 @@
                     "success": false,
                     "error": "Bad Request",
                     "message": "Request validation failed",
-                    "code": "VALIDATION_FAILED",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
                     "errors": [
                       {
                         "field": "name",
                         "location": "body",
-                        "code": "INVALID_LENGTH",
                         "message": "name must be longer than or equal to 2 characters"
                       }
                     ]
@@ -85,7 +83,6 @@
                     "success": false,
                     "error": "Unauthorized",
                     "message": "Missing or malformed credentials",
-                    "code": "UNAUTHENTICATED",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -106,7 +103,26 @@
                     "success": false,
                     "error": "Not Found",
                     "message": "user 999999 not found",
-                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁（响应头带 `Retry-After` 与 `X-RateLimit-*`）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Too Many Requests",
+                    "message": "Too many requests, please try again later",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -127,7 +143,6 @@
                     "success": false,
                     "error": "Internal Server Error",
                     "message": "Internal server error",
-                    "code": "INTERNAL_ERROR",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -186,13 +201,11 @@
                     "success": false,
                     "error": "Bad Request",
                     "message": "Request validation failed",
-                    "code": "VALIDATION_FAILED",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
                     "errors": [
                       {
                         "field": "name",
                         "location": "body",
-                        "code": "INVALID_LENGTH",
                         "message": "name must be longer than or equal to 2 characters"
                       }
                     ]
@@ -215,7 +228,6 @@
                     "success": false,
                     "error": "Unauthorized",
                     "message": "Missing or malformed credentials",
-                    "code": "UNAUTHENTICATED",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -236,7 +248,26 @@
                     "success": false,
                     "error": "Not Found",
                     "message": "user 999999 not found",
-                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁（响应头带 `Retry-After` 与 `X-RateLimit-*`）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Too Many Requests",
+                    "message": "Too many requests, please try again later",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -257,7 +288,6 @@
                     "success": false,
                     "error": "Internal Server Error",
                     "message": "Internal server error",
-                    "code": "INTERNAL_ERROR",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -325,13 +355,11 @@
                     "success": false,
                     "error": "Bad Request",
                     "message": "Request validation failed",
-                    "code": "VALIDATION_FAILED",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
                     "errors": [
                       {
                         "field": "name",
                         "location": "body",
-                        "code": "INVALID_LENGTH",
                         "message": "name must be longer than or equal to 2 characters"
                       }
                     ]
@@ -354,7 +382,6 @@
                     "success": false,
                     "error": "Not Found",
                     "message": "user 999999 not found",
-                    "code": "USER_NOT_FOUND",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -375,7 +402,26 @@
                     "success": false,
                     "error": "Conflict",
                     "message": "email neo@example.com already exists",
-                    "code": "EMAIL_ALREADY_EXISTS",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁（响应头带 `Retry-After` 与 `X-RateLimit-*`）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Too Many Requests",
+                    "message": "Too many requests, please try again later",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -396,7 +442,6 @@
                     "success": false,
                     "error": "Internal Server Error",
                     "message": "Internal server error",
-                    "code": "INTERNAL_ERROR",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -452,27 +497,6 @@
                 "email"
               ]
             }
-          },
-          {
-            "name": "keyword",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "role",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "admin",
-                "editor",
-                "viewer"
-              ]
-            }
           }
         ],
         "responses": {
@@ -518,13 +542,11 @@
                     "success": false,
                     "error": "Bad Request",
                     "message": "Request validation failed",
-                    "code": "VALIDATION_FAILED",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
                     "errors": [
                       {
                         "field": "name",
                         "location": "body",
-                        "code": "INVALID_LENGTH",
                         "message": "name must be longer than or equal to 2 characters"
                       }
                     ]
@@ -547,7 +569,26 @@
                     "success": false,
                     "error": "Not Found",
                     "message": "user 999999 not found",
-                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁（响应头带 `Retry-After` 与 `X-RateLimit-*`）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Too Many Requests",
+                    "message": "Too many requests, please try again later",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -568,7 +609,6 @@
                     "success": false,
                     "error": "Internal Server Error",
                     "message": "Internal server error",
-                    "code": "INTERNAL_ERROR",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -592,9 +632,7 @@
             "in": "path",
             "description": "用户 id，从 1 开始",
             "schema": {
-              "minimum": 1,
-              "example": 1,
-              "type": "number"
+              "example": 1
             }
           }
         ],
@@ -638,13 +676,11 @@
                     "success": false,
                     "error": "Bad Request",
                     "message": "Request validation failed",
-                    "code": "VALIDATION_FAILED",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
                     "errors": [
                       {
                         "field": "name",
                         "location": "body",
-                        "code": "INVALID_LENGTH",
                         "message": "name must be longer than or equal to 2 characters"
                       }
                     ]
@@ -667,7 +703,26 @@
                     "success": false,
                     "error": "Not Found",
                     "message": "user 999999 not found",
-                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁（响应头带 `Retry-After` 与 `X-RateLimit-*`）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Too Many Requests",
+                    "message": "Too many requests, please try again later",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -688,7 +743,6 @@
                     "success": false,
                     "error": "Internal Server Error",
                     "message": "Internal server error",
-                    "code": "INTERNAL_ERROR",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -711,9 +765,7 @@
             "in": "path",
             "description": "用户 id",
             "schema": {
-              "minimum": 1,
-              "example": 1,
-              "type": "number"
+              "example": 1
             }
           }
         ],
@@ -767,13 +819,11 @@
                     "success": false,
                     "error": "Bad Request",
                     "message": "Request validation failed",
-                    "code": "VALIDATION_FAILED",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
                     "errors": [
                       {
                         "field": "name",
                         "location": "body",
-                        "code": "INVALID_LENGTH",
                         "message": "name must be longer than or equal to 2 characters"
                       }
                     ]
@@ -796,7 +846,6 @@
                     "success": false,
                     "error": "Not Found",
                     "message": "user 999999 not found",
-                    "code": "USER_NOT_FOUND",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -817,7 +866,26 @@
                     "success": false,
                     "error": "Conflict",
                     "message": "email neo@example.com already exists",
-                    "code": "EMAIL_ALREADY_EXISTS",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁（响应头带 `Retry-After` 与 `X-RateLimit-*`）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Too Many Requests",
+                    "message": "Too many requests, please try again later",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -838,7 +906,6 @@
                     "success": false,
                     "error": "Internal Server Error",
                     "message": "Internal server error",
-                    "code": "INTERNAL_ERROR",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -906,13 +973,11 @@
                     "success": false,
                     "error": "Bad Request",
                     "message": "Request validation failed",
-                    "code": "VALIDATION_FAILED",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
                     "errors": [
                       {
                         "field": "name",
                         "location": "body",
-                        "code": "INVALID_LENGTH",
                         "message": "name must be longer than or equal to 2 characters"
                       }
                     ]
@@ -935,7 +1000,26 @@
                     "success": false,
                     "error": "Not Found",
                     "message": "user 999999 not found",
-                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁（响应头带 `Retry-After` 与 `X-RateLimit-*`）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Too Many Requests",
+                    "message": "Too many requests, please try again later",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -956,7 +1040,6 @@
                     "success": false,
                     "error": "Internal Server Error",
                     "message": "Internal server error",
-                    "code": "INTERNAL_ERROR",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -1015,13 +1098,11 @@
                     "success": false,
                     "error": "Bad Request",
                     "message": "Request validation failed",
-                    "code": "VALIDATION_FAILED",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
                     "errors": [
                       {
                         "field": "name",
                         "location": "body",
-                        "code": "INVALID_LENGTH",
                         "message": "name must be longer than or equal to 2 characters"
                       }
                     ]
@@ -1044,7 +1125,26 @@
                     "success": false,
                     "error": "Not Found",
                     "message": "user 999999 not found",
-                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁（响应头带 `Retry-After` 与 `X-RateLimit-*`）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Too Many Requests",
+                    "message": "Too many requests, please try again later",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -1065,7 +1165,6 @@
                     "success": false,
                     "error": "Internal Server Error",
                     "message": "Internal server error",
-                    "code": "INTERNAL_ERROR",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -1134,13 +1233,11 @@
                     "success": false,
                     "error": "Bad Request",
                     "message": "Request validation failed",
-                    "code": "VALIDATION_FAILED",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
                     "errors": [
                       {
                         "field": "name",
                         "location": "body",
-                        "code": "INVALID_LENGTH",
                         "message": "name must be longer than or equal to 2 characters"
                       }
                     ]
@@ -1163,7 +1260,26 @@
                     "success": false,
                     "error": "Not Found",
                     "message": "user 999999 not found",
-                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁（响应头带 `Retry-After` 与 `X-RateLimit-*`）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Too Many Requests",
+                    "message": "Too many requests, please try again later",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -1184,7 +1300,6 @@
                     "success": false,
                     "error": "Internal Server Error",
                     "message": "Internal server error",
-                    "code": "INTERNAL_ERROR",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -1244,13 +1359,11 @@
                     "success": false,
                     "error": "Bad Request",
                     "message": "Request validation failed",
-                    "code": "VALIDATION_FAILED",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
                     "errors": [
                       {
                         "field": "name",
                         "location": "body",
-                        "code": "INVALID_LENGTH",
                         "message": "name must be longer than or equal to 2 characters"
                       }
                     ]
@@ -1273,7 +1386,26 @@
                     "success": false,
                     "error": "Not Found",
                     "message": "user 999999 not found",
-                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁（响应头带 `Retry-After` 与 `X-RateLimit-*`）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Too Many Requests",
+                    "message": "Too many requests, please try again later",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -1294,7 +1426,6 @@
                     "success": false,
                     "error": "Internal Server Error",
                     "message": "Internal server error",
-                    "code": "INTERNAL_ERROR",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -1303,6 +1434,109 @@
           }
         },
         "summary": "没有 return 值的 handler 也走信封",
+        "tags": [
+          "validation-demo"
+        ]
+      }
+    },
+    "/validation-demo/boom": {
+      "get": {
+        "description": "抛普通 Error ⇒ HTTP 500 + 通用文案；完整堆栈只出现在服务端日志里，并且与响应头 `x-request-id` 是同一个 `traceId`。",
+        "operationId": "ValidationDemoController_boom",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "入参校验失败（`errors[]` 里是字段级明细）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Bad Request",
+                    "message": "Request validation failed",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
+                    "errors": [
+                      {
+                        "field": "name",
+                        "location": "body",
+                        "message": "name must be longer than or equal to 2 characters"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源或路由不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Not Found",
+                    "message": "user 999999 not found",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁（响应头带 `Retry-After` 与 `X-RateLimit-*`）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Too Many Requests",
+                    "message": "Too many requests, please try again later",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "未捕获的内部错误（细节只进日志，不进响应）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Internal Server Error",
+                    "message": "Internal server error",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "故意触发 500（堆栈只进日志、不进响应）",
         "tags": [
           "validation-demo"
         ]
@@ -1366,13 +1600,11 @@
                     "success": false,
                     "error": "Bad Request",
                     "message": "Request validation failed",
-                    "code": "VALIDATION_FAILED",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
                     "errors": [
                       {
                         "field": "name",
                         "location": "body",
-                        "code": "INVALID_LENGTH",
                         "message": "name must be longer than or equal to 2 characters"
                       }
                     ]
@@ -1395,7 +1627,26 @@
                     "success": false,
                     "error": "Not Found",
                     "message": "user 999999 not found",
-                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁（响应头带 `Retry-After` 与 `X-RateLimit-*`）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Too Many Requests",
+                    "message": "Too many requests, please try again later",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -1416,7 +1667,6 @@
                     "success": false,
                     "error": "Internal Server Error",
                     "message": "Internal server error",
-                    "code": "INTERNAL_ERROR",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -1485,13 +1735,11 @@
                     "success": false,
                     "error": "Bad Request",
                     "message": "Request validation failed",
-                    "code": "VALIDATION_FAILED",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
                     "errors": [
                       {
                         "field": "name",
                         "location": "body",
-                        "code": "INVALID_LENGTH",
                         "message": "name must be longer than or equal to 2 characters"
                       }
                     ]
@@ -1514,7 +1762,26 @@
                     "success": false,
                     "error": "Not Found",
                     "message": "user 999999 not found",
-                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁（响应头带 `Retry-After` 与 `X-RateLimit-*`）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Too Many Requests",
+                    "message": "Too many requests, please try again later",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -1535,7 +1802,6 @@
                     "success": false,
                     "error": "Internal Server Error",
                     "message": "Internal server error",
-                    "code": "INTERNAL_ERROR",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -1596,13 +1862,11 @@
                     "success": false,
                     "error": "Bad Request",
                     "message": "Request validation failed",
-                    "code": "VALIDATION_FAILED",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f",
                     "errors": [
                       {
                         "field": "name",
                         "location": "body",
-                        "code": "INVALID_LENGTH",
                         "message": "name must be longer than or equal to 2 characters"
                       }
                     ]
@@ -1625,7 +1889,26 @@
                     "success": false,
                     "error": "Not Found",
                     "message": "user 999999 not found",
-                    "code": "USER_NOT_FOUND",
+                    "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁（响应头带 `Retry-After` 与 `X-RateLimit-*`）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "example": {
+                    "success": false,
+                    "error": "Too Many Requests",
+                    "message": "Too many requests, please try again later",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -1646,7 +1929,6 @@
                     "success": false,
                     "error": "Internal Server Error",
                     "message": "Internal server error",
-                    "code": "INTERNAL_ERROR",
                     "traceId": "3f1c9a4e-6b0a-4e2f-9a1d-6a1b1c2d3e4f"
                   }
                 }
@@ -1663,7 +1945,7 @@
   },
   "info": {
     "title": "nestjs-start API",
-    "description": "`nestjs-start` 的接口文档。\n\n**响应契约**：\n- 成功 `{ success: true, data, meta? }`\n- 失败 `{ success: false, error, message, code?, traceId?, errors? }`\n\n`success` 是唯一判据；`code` 是机器判据（**不要 parse `message`**）；\n数字状态码只在 HTTP 状态行里；`traceId` 同时回写在 `x-request-id` 响应头。\n详见 `docs/validation.md` §9。",
+    "description": "`nestjs-start` 的接口文档。\n\n**响应契约**：\n- 成功 `{ success: true, data, meta? }`\n- 失败 `{ success: false, error, message, traceId?, errors? }`\n\n`success` 是唯一判据；`code` 是机器判据（**不要 parse `message`**）；\n数字状态码只在 HTTP 状态行里；`traceId` 同时回写在 `x-request-id` 响应头。\n详见 `docs/validation.md` §9。",
     "version": "1.0.0",
     "contact": {},
     "license": {
@@ -1694,17 +1976,15 @@
         "properties": {
           "username": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 32,
             "description": "用户名（去首尾空格、大小写不敏感）",
             "example": "neo"
           },
           "password": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 72,
             "description": "密码（**不去空格**：首尾空格是密码的一部分）",
-            "example": "matrix"
+            "example": "matrix",
+            "minLength": 1,
+            "maxLength": 72
           }
         },
         "required": [
@@ -1714,26 +1994,7 @@
       },
       "AddressDto": {
         "type": "object",
-        "properties": {
-          "street": {
-            "type": "string",
-            "minLength": 2,
-            "maxLength": 40
-          },
-          "city": {
-            "type": "string",
-            "minLength": 2,
-            "maxLength": 30
-          },
-          "zip": {
-            "type": "string",
-            "pattern": "^\\d{5,6}$"
-          }
-        },
-        "required": [
-          "street",
-          "city"
-        ]
+        "properties": {}
       },
       "CreateUserDto": {
         "type": "object",
@@ -1741,35 +2002,31 @@
           "name": {
             "type": "string",
             "description": "用户名（不允许 admin / root / system 等保留字；首尾空格会被去掉）",
-            "minLength": 2,
-            "maxLength": 20,
             "example": "Neo"
           },
           "email": {
             "type": "string",
             "description": "邮箱，全局唯一（比较前会去空格并转小写）",
-            "format": "email",
             "example": "neo@example.com"
           },
           "age": {
             "type": "number",
-            "minimum": 0,
-            "maximum": 150,
             "description": "年龄",
-            "example": 30
+            "example": 30,
+            "minimum": 0,
+            "maximum": 150
           },
           "role": {
+            "type": "string",
             "description": "角色",
             "enum": [
               "admin",
               "editor",
               "viewer"
             ],
-            "type": "string",
             "example": "viewer"
           },
           "tags": {
-            "maxItems": 5,
             "description": "标签（最多 5 个）",
             "example": [
               "founder"
@@ -1800,35 +2057,31 @@
           "name": {
             "type": "string",
             "description": "用户名（不允许 admin / root / system 等保留字；首尾空格会被去掉）",
-            "minLength": 2,
-            "maxLength": 20,
             "example": "Neo"
           },
           "email": {
             "type": "string",
             "description": "邮箱，全局唯一（比较前会去空格并转小写）",
-            "format": "email",
             "example": "neo@example.com"
           },
           "age": {
             "type": "number",
-            "minimum": 0,
-            "maximum": 150,
             "description": "年龄",
-            "example": 30
+            "example": 30,
+            "minimum": 0,
+            "maximum": 150
           },
           "role": {
+            "type": "string",
             "description": "角色",
             "enum": [
               "admin",
               "editor",
               "viewer"
             ],
-            "type": "string",
             "example": "viewer"
           },
           "tags": {
-            "maxItems": 5,
             "description": "标签（最多 5 个）",
             "example": [
               "founder"
@@ -1850,25 +2103,7 @@
       },
       "WebhookDto": {
         "type": "object",
-        "properties": {
-          "event": {
-            "type": "string",
-            "minLength": 2,
-            "maxLength": 40
-          },
-          "data": {
-            "type": "object",
-            "additionalProperties": true
-          },
-          "count": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "event",
-          "data",
-          "count"
-        ]
+        "properties": {}
       },
       "PlainWebhookDto": {
         "type": "object",
@@ -1903,13 +2138,13 @@
             "maximum": 150
           },
           "role": {
+            "type": "string",
+            "description": "角色",
             "enum": [
               "admin",
               "editor",
               "viewer"
             ],
-            "type": "string",
-            "description": "角色",
             "example": "admin"
           },
           "tags": {
@@ -1963,8 +2198,8 @@
         "properties": {
           "received": {
             "type": "object",
-            "additionalProperties": true,
-            "description": "局部 `ValidationPipe` 配了 422，但全局管道先跑 ⇒ 非法 body 仍然是 400"
+            "description": "局部 `ValidationPipe` 配了 422，但全局管道先跑 ⇒ 非法 body 仍然是 400",
+            "additionalProperties": true
           },
           "note": {
             "type": "string",
@@ -1982,8 +2217,8 @@
         "properties": {
           "received": {
             "type": "object",
-            "additionalProperties": true,
-            "description": "经过校验管道处理后的载荷（未声明字段已被 whitelist 剥掉）"
+            "description": "经过校验管道处理后的载荷（未声明字段已被 whitelist 剥掉）",
+            "additionalProperties": true
           }
         },
         "required": [
@@ -1995,8 +2230,8 @@
         "properties": {
           "received": {
             "type": "object",
-            "additionalProperties": true,
-            "description": "`@RawBody()` 原样回显的载荷 —— 跳过整个管道，未声明字段**也会**保留"
+            "description": "`@RawBody()` 原样回显的载荷 —— 跳过整个管道，未声明字段**也会**保留",
+            "additionalProperties": true
           }
         },
         "required": [
@@ -2008,8 +2243,8 @@
         "properties": {
           "received": {
             "type": "object",
-            "additionalProperties": false,
             "description": "`PlainWebhookDto` 一个校验装饰器都没有 ⇒ 每个字段都算未声明 ⇒ 被 whitelist 剥成 `{}`",
+            "additionalProperties": false,
             "example": {}
           }
         },
@@ -2123,28 +2358,6 @@
             "type": "string",
             "example": "Request validation failed"
           },
-          "code": {
-            "description": "机器可读的错误码（前端 `switch` 这个，不要 parse `message`）。框架自身抛的错可能没有。",
-            "type": "string",
-            "enum": [
-              "VALIDATION_FAILED",
-              "EMAIL_ALREADY_EXISTS",
-              "USER_NOT_FOUND",
-              "INTERNAL_ERROR",
-              "UNAUTHENTICATED",
-              "REQUIRED",
-              "INVALID_TYPE",
-              "INVALID_FORMAT",
-              "INVALID_LENGTH",
-              "OUT_OF_RANGE",
-              "NOT_ALLOWED_VALUE",
-              "RESERVED_NAME",
-              "TOO_MANY_ITEMS",
-              "UNKNOWN_FIELD",
-              "UNKNOWN_CONSTRAINT"
-            ],
-            "example": "VALIDATION_FAILED"
-          },
           "traceId": {
             "description": "请求 id：同时回写在 `x-request-id` 响应头、并写进服务端日志，用来把一次响应和日志对上。",
             "type": "string",
@@ -2185,28 +2398,6 @@
               "param"
             ],
             "example": "body"
-          },
-          "code": {
-            "description": "字段级的机器可读错误码（语义化，不是 class-validator 的约束名）",
-            "type": "string",
-            "enum": [
-              "VALIDATION_FAILED",
-              "EMAIL_ALREADY_EXISTS",
-              "USER_NOT_FOUND",
-              "INTERNAL_ERROR",
-              "UNAUTHENTICATED",
-              "REQUIRED",
-              "INVALID_TYPE",
-              "INVALID_FORMAT",
-              "INVALID_LENGTH",
-              "OUT_OF_RANGE",
-              "NOT_ALLOWED_VALUE",
-              "RESERVED_NAME",
-              "TOO_MANY_ITEMS",
-              "UNKNOWN_FIELD",
-              "UNKNOWN_CONSTRAINT"
-            ],
-            "example": "INVALID_LENGTH"
           }
         }
       }

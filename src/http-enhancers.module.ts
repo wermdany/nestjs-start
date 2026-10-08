@@ -9,10 +9,10 @@ import type {
 } from '@nestjs/common';
 import { RequestMethod } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
-import { AppExceptionFilter } from './validation/http-exception.filter';
-import { createValidationPipe } from './validation/validation-pipe.factory';
-import { ResponseEnvelopeInterceptor } from './response/response-envelope.interceptor';
-import { RequestIdMiddleware } from './observability/request-id.middleware';
+import { AppExceptionFilter } from './system/http-validation/http-exception.filter';
+import { createValidationPipe } from './system/http-validation/validation-pipe.factory';
+import { ResponseEnvelopeInterceptor } from './system/http-response/response-envelope.interceptor';
+import { RequestIdMiddleware } from './system/request-context/request-id.middleware';
 
 /**
  * `ApiContractModule` 的配置项。
@@ -31,7 +31,7 @@ export interface ApiContractOptions extends ValidationPipeOptions {
    * 是否全局启用响应信封，默认 `true`。关掉后成功响应是 handler 的裸返回值。
    *
    * 失败响应**不受它影响**：`AppExceptionFilter` 是全局过滤器，始终产出
-   * `{ success: false, error, message, code?, traceId?, errors? }`。
+   * `{ success: false, error, message, traceId?, errors? }`。
    */
   envelope?: boolean;
 }
@@ -64,7 +64,7 @@ export const API_CONTRACT_OPTIONS = Symbol('API_CONTRACT_OPTIONS');
  * | token | 实现 | 负责 |
  * | --- | --- | --- |
  * | `APP_PIPE` | `createValidationPipe(options)` | 入参校验（whitelist / transform / 结构化错误 + `location`） |
- * | `APP_FILTER` | `AppExceptionFilter` | **失败**响应 `{ success, error, message, code?, traceId?, errors? }` + HTTP 状态码 |
+ * | `APP_FILTER` | `AppExceptionFilter` | **失败**响应 `{ success, error, message, traceId?, errors? }` + HTTP 状态码 |
  * | `APP_INTERCEPTOR` | `ResponseEnvelopeInterceptor` | **成功**响应 `{ success: true, data, meta? }` |
  * | 中间件 | `RequestIdMiddleware` | 请求 id → `AsyncLocalStorage` + `x-request-id` 响应头 + `traceId` |
  *

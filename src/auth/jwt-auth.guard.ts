@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { CanActivate, ExecutionContext } from '@nestjs/common';
-import { setRequestUserId } from '@/contract';
+import { setRequestUserId } from '@/system/request-context';
 import { IS_PUBLIC_KEY } from './decorators/public.decorator';
 import { UnauthenticatedException } from './exceptions';
 import { isJwtPayload, JWT_PAYLOAD_PROP } from './jwt-payload';

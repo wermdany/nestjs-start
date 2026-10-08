@@ -1,25 +1,26 @@
-# workspace 成员。
+# ⚠️ 这个文件**不再**是 workspace 声明 —— 本仓库是**单包项目**，`packages:` 字段已被移除
+# （没有它时 pnpm 只把根包纳入 workspace，正是我们要的；`packages/api-contract` 也已删除）。
 #
-# 目前只有 `packages/api-contract`：**纯类型**的线上契约包（响应信封 / 分页 / 错误码）。
-# 服务端通过 tsconfig 的 `paths` 别名按**源码**做类型检查（编译后 import 被完全擦除，
-# 所以运行时不依赖它的构建产物）；前端 / BFF 按普通包消费 `dist` 里的 `.d.ts`
-# —— 契约只有一份定义，两边会同时编译失败，而不是线上才发现字段对不上。
-packages:
-  - 'packages/*'
+# 保留这个文件的唯一理由是：**pnpm 11 把项目级设置也读这里**。
+# 官方文档原话（https://pnpm.io/settings）：
+#   "pnpm gets its configuration from the command line, environment variables,
+#    and `pnpm-workspace.yaml`."
+# 而 `package.json` 里的 `pnpm` 字段在 pnpm 11 **不再被读取**
+# （写在那里会得到 `WARN The "pnpm" field in package.json is no longer read by pnpm`，
+# 设置被静默忽略）。
+#
+# 也就是说：「去掉 workspace 特性」与「删掉这个文件」是**两件事**：
+# 前者做到了（没有成员包），后者不行 —— 否则项目级设置无处安放。
 
-# pnpm 的构建脚本白名单（`pnpm approve-builds` 会往这里写）。
+# 依赖构建脚本的白名单。
 #
 # ⚠️ 值**必须**是布尔 `true` / `false`：pnpm 的 `createAllowBuildFunction()`
-# 只对这两个值建规则，写别的（包括 `approve-builds` 留下的占位符
-# `set this to true or false`）会被**静默忽略**，然后以
-# `ERR_PNPM_IGNORED_BUILDS` 失败。
+# 只对这两个值建规则，写别的（包括 `pnpm approve-builds` 留下的占位符
+# `set this to true or false` —— 实测它就是被这样写进来的）会被**静默忽略**，
+# 然后以 `ERR_PNPM_IGNORED_BUILDS` 失败。
 #
-# `@scarf/scarf` 是 `@nestjs/swagger` 的传递依赖，postinstall 只做匿名统计上报，
-# 对功能没有任何影响 —— 显式拒绝（`false`）既关掉上报，也不再让 install 报错。
+# `@swc/core` 的 postinstall 要跑（Nest CLI 的 swc 编译器需要它）。
+# allowlist 是「只允许列出的」语义 ⇒ `@scarf/scarf`（`@nestjs/swagger` 的传递依赖，
+# postinstall 只做匿名统计上报）天然被拒，不必显式写 `false`。
 allowBuilds:
-  '@scarf/scarf': false
   '@swc/core': true
-
-# 删 node_modules 重新链接时不弹确认（本机 pnpm 有时拿不到 TTY，
-# 否则会以 ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY 中断）。
-confirmModulesPurge: false

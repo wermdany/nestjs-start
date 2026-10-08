@@ -6,6 +6,7 @@ import {
   ERROR_ENVELOPE_REF,
   INTERNAL_EXAMPLE,
   NOT_FOUND_EXAMPLE,
+  TOO_MANY_REQUESTS_EXAMPLE,
   UNAUTHENTICATED_EXAMPLE,
 } from './envelope.schema';
 
@@ -21,10 +22,14 @@ const errorResponse = (
 /**
  * 把**失败响应**挂到控制器上：类级装饰器，一次覆盖该控制器的所有路由。
  *
+ * 覆盖 400 / 404 / **429** / 500 四条，它们**全部**来自全局装配
+ * （校验管道 → 400、异常过滤器 → 404/500、`PlatformModule` 的限流守卫 → 429），
+ * 所以对每条路由都成立 —— 写在类上不会撒谎。
+ *
  * 为什么能在类级生效（`@nestjs/swagger` 的实测行为，见 docs/validation.md §9.7）：
  * `SwaggerExplorer.exploreGlobalMetadata()` 会在**类级**调用
  * `exploreGlobalApiResponseMetadata()`，它读到的响应会被 merge 进该控制器每条路由的操作对象。
- * 所以 400/404/500 只写一次，不必在 12 条路由上重复。
+ * 所以 400/404/429/500 只写一次，不必在 12 条路由上重复。
  *
  * ⚠️ 一个必须知道的边界：**方法级**的 `@ApiResponse` 一旦存在，
  * `exploreApiResponseMetadata()` 会**直接返回、不再与类级合并**。
@@ -43,6 +48,15 @@ export const ApiEnvelopeErrors = (): ClassDecorator & MethodDecorator =>
     ApiResponse({
       status: 404,
       ...errorResponse('资源或路由不存在', NOT_FOUND_EXAMPLE),
+    }),
+    // 429 在**类级**：限流是全局守卫（`PlatformModule` 的 `APP_GUARD`），
+    // 所以每条路由都可能被限流 —— 声明在类上不是"过度声明"。
+    ApiResponse({
+      status: 429,
+      ...errorResponse(
+        '请求过于频繁（响应头带 `Retry-After` 与 `X-RateLimit-*`）',
+        TOO_MANY_REQUESTS_EXAMPLE,
+      ),
     }),
     ApiResponse({
       status: 500,

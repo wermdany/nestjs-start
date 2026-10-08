@@ -126,7 +126,7 @@ npx nest g service cats --flat --no-spec   # 不建目录、不生成 .spec.ts
 - [x] 跑 `npm run test` 和 `npm run test:e2e`，确认都是 1 passed。
 - [x] 跑 `npx nest g resource temp --dry-run`，把生成清单抄下来（不要真的生成）。
 - [x] 用 `nest g` 真的生成一个 `temp` 模块，对着代码读一遍，然后**删掉**这些文件，确认 `npm run build` 仍然通过。
-- [x] 做一次包管理器决策：仓库里同时存在 `package-lock.json` 与 `pnpm-lock.yaml`，还有 `pnpm-workspace.yaml`。选定 **一个**（npm 或 pnpm），删掉另一个的 lockfile，之后所有安装命令统一用它。
+- [x] 做一次包管理器决策：仓库里同时存在 `package-lock.json` 与 `pnpm-lock.yaml`，还有 `pnpm-workspace.yaml`（已删除）。选定 **一个**（npm 或 pnpm），删掉另一个的 lockfile，之后所有安装命令统一用它。
 - [x] 读懂并**解释** `src/main.ts` 里这段改动的危害，写出你的修复版：
 
   ```ts
@@ -307,7 +307,7 @@ npx nest g service cats --flat --no-spec   # 不建目录、不生成 .spec.ts
 
 - Nest 有**内置全局异常层**：未捕获的异常不会让进程崩，而是转成 `{ statusCode, message }` 响应。
 - `HttpException` 及内置子类：`BadRequestException`(400)、`UnauthorizedException`(401)、`ForbiddenException`(403)、`NotFoundException`(404)、`ConflictException`(409) 等。
-- 自定义响应体：`throw new BadRequestException({ message: '...', code: 'X' })`。
+- 自定义响应体：`throw new BadRequestException({ message: '...' })`。
 - 自定义过滤器：`@Catch(HttpException)` + `implements ExceptionFilter` + `catch(exception, host)`，用 `ArgumentsHost` 拿到 `req`/`res`。
 - 注册层级：`@UseFilters()` 方法级/控制器级 → `app.useGlobalFilters()` → `{ provide: APP_FILTER, useClass: X }`（**推荐**，因为能注入依赖）。
 - 区分「异常类」与「错误对象」：非 `HttpException` 的普通 `Error` 会变成 **500**，且不泄露堆栈给客户端。
@@ -433,7 +433,7 @@ npx nest g service cats --flat --no-spec   # 不建目录、不生成 .spec.ts
 - `@Injectable() class X implements NestInterceptor { intercept(context, next: CallHandler): Observable<any> }`。
 - `next.handle()` 返回 `Observable`；用 RxJS `pipe()` 组合：
   - `tap()` —— 只做副作用（日志、计时）
-  - `map()` —— **改造返回值**（统一响应包装 `{ code, data }`）
+  - `map()` —— **改造返回值**（统一响应包装 `{ success, data }`）
   - `catchError()` —— 把异常转换成别的异常
   - `timeout()` / `delay()` / `retry()`
 - `CallHandler.handle()` **不调用**，路由就不会执行。
@@ -443,17 +443,17 @@ npx nest g service cats --flat --no-spec   # 不建目录、不生成 .spec.ts
 
 **🔍 本仓库对照**
 
-- `src/contract/response/response-envelope.interceptor.ts` 就是"统一响应包装"：`next.handle().pipe(map(...))`
+- `src/system/http-response/response-envelope.interceptor.ts` 就是"统一响应包装"：`next.handle().pipe(map(...))`
   把返回值包成 `{ success: true, data, meta? }`，并通过 `APP_INTERCEPTOR` 全局注册。
 - 它同时演示了 `map()` 之外的判断：`@Render()` / `@Redirect()` / `@Sse()` / `StreamableFile` 用
   `Reflect` 元数据 + 类型判断提前放行（包了就会破坏这些响应）。
 - 失败侧不归 interceptor 管：`AppExceptionFilter` 用 `@Catch()` 统一错误形状，两侧合起来才是"成功/失败同一个形状"。
-- e2e 断言用的是 `Object.keys(body).sort()` 精确比对键集，见 `src/modules/validation-demo/__tests__/validation-demo.e2e-spec.ts`。
+- e2e 断言用的是 `Object.keys(body).sort()` 精确比对键集，见 `src/modules/validation-demo/__tests__/validation-demo.e2e-spec.ts`（已删除）。
 
 **🛠 练习任务**
 
 - [ ] 写 `LoggingInterceptor`，用 `tap` 打印「before / after」和 `Date.now()` 差值，验证顺序是 handler **之前和之后**各一次。
-- [x] 写 `TransformInterceptor`，用 `map` 把返回值包装为 `{ success: true, data }`，`curl` 验证；**同时更新 e2e 断言**，让测试重新变绿。（已实现为 `ResponseEnvelopeInterceptor`，见 `src/contract/response/`）
+- [x] 写 `TransformInterceptor`，用 `map` 把返回值包装为 `{ success: true, data }`，`curl` 验证；**同时更新 e2e 断言**，让测试重新变绿。（已实现为 `ResponseEnvelopeInterceptor`，见 `src/system/http-response/`）
 - [ ] 用 `catchError` 把普通 `Error` 转成 `BadRequestException`，验证响应状态码变化。
 - [ ] 用 `timeout(1000)`（或 `timeout(1000)` + `catchError`）给一个 `await sleep(2000)` 的路由加超时，观察返回 500 并思考该换成什么异常。
 - [ ] 故意注释掉 `next.handle()`，确认路由**完全未执行**（用 `tap` 里的日志验证）。
@@ -484,7 +484,7 @@ npx nest g service cats --flat --no-spec   # 不建目录、不生成 .spec.ts
 **🔍 本仓库对照**
 
 - 契约层里已经有一批自定义装饰器：`@RawBody()`、`@NoEnvelope()`、`@IsOptionalNotNull()`
-  （`src/contract/`），以及认证层的 `@Public()` / `@CurrentUser()`（`src/auth/decorators/`）。
+  （`src/system/`），以及认证层的 `@Public()` / `@CurrentUser()`（`src/auth/decorators/`）。
 - 其中 `@CurrentUser()` 是 `createParamDecorator` 的现成范例，`@Public()` 是 `SetMetadata` 的；
   `applyDecorators` 的用法见 `@ApiEnvelopeErrors()`（`src/swagger/api-errors.decorator.ts`）。
 
@@ -978,7 +978,7 @@ npx nest g service cats --flat --no-spec   # 不建目录、不生成 .spec.ts
 📖 参考 §2.5 [/exception-filters](https://docs.nestjs.com/exception-filters)
 
 - 业务异常继承 `HttpException`，形成自己的异常族（`InsufficientBalanceException` 等）。
-- 全局 filter 统一响应结构，输出稳定的 `code`/`message`/`traceId`。
+- 全局 filter 统一响应结构，输出稳定的 `error`/`message`/`traceId`。
 - 区分「可暴露给客户端的信息」与「内部细节」——永远不要把堆栈返回给客户端。
 - 练习：
   - [x] 定义 2 个业务异常类，都继承 `HttpException`。（`src/modules/validation-demo/exceptions.ts`：409 / 404）
@@ -997,7 +997,7 @@ npx nest g service cats --flat --no-spec   # 不建目录、不生成 .spec.ts
   - [x] 装包，在 `main.ts` 挂文档，访问 `http://localhost:3000/docs` 看到 UI。（`setupSwagger(app)`；按环境启停见 `is-swagger-enabled.ts`）
   - [x] 给一个 DTO 加 `@ApiProperty`，对比 UI 上的 schema 变化。
   - [x] 配置 CLI 插件后重启，确认手写的 `@ApiProperty` 可以删掉仍然有 schema。（仍保留少数显式写入：枚举、分页、以及契约层的信封投影 —— 见 `docs/validation.md` §9.7）
-  - [x] 让 e2e 里的文档与构建产物一致：`jest-e2e.json` 里给 ts-jest 挂 `astTransformers`，桥接文件是仓库根的 `jest-swagger-transformer.js`。
+  - [x] 让 e2e 里的文档与构建产物一致：`jest-e2e.json` 里给 ts-jest 挂 `astTransformers`，桥接文件是仓库根的 `jest-swagger-transformer.js`（已删除）。
 
 ### 5.7 Caching（缓存）
 
@@ -1048,7 +1048,7 @@ npx nest g service cats --flat --no-spec   # 不建目录、不生成 .spec.ts
 
 | 主题 | 是什么 | 什么时候学 |
 | --- | --- | --- |
-| **Database**、TypeORM / Prisma / Mongoose / MikroORM | 数据持久化 | 本计划完成后**第一件事**；届时只需学「Repository/DTO 映射」+ 事务 |
+| **Database**、TypeORM / Prisma / Mongoose / MikroORM | 数据持久化 | 本计划完成后**第一件事**；届时只需学「Repository/DTO 映射」+ 事务。**如果你还没学过数据库**（没写过 SQL、没装过库），先走配套的 [`docs/database-learning-plan.md`](database-learning-plan.md)（四周：SQL → 建模约束 → 事务并发 → 接回本仓库） |
 | GraphQL | 另一种 API 风格（`@nestjs/graphql`） | 需要 schema-first 接口时 |
 | WebSockets / SSE 之外的实时通信 | 双向长连接（`@nestjs/websockets`） | 需要推送/聊天时 |
 | Microservices | 跨进程通信（`@nestjs/microservices`） | 拆分服务时 |

@@ -12,7 +12,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { IsNotReservedName, IsOptionalNotNull } from '@/contract';
+import { IsNotReservedName, IsOptionalNotNull } from '@/system/http-validation';
 import { AddressDto } from './address.dto';
 import { UserRole } from './user-role.enum';
 
@@ -61,7 +61,7 @@ export class CreateUserDto {
     maximum: 150,
   })
   // `@IsOptionalNotNull()`（不是 `@IsOptional()`）：可以不传，但显式传 `null` 会被拒。
-  // 详见 src/contract/validation/is-optional-not-null.decorator.ts
+  // 详见 src/system/http-validation/is-optional-not-null.decorator.ts
   @IsOptionalNotNull()
   @IsInt()
   @Min(0)

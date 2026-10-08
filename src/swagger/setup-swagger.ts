@@ -1,52 +1,30 @@
 import type { INestApplication } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { OpenAPIObject } from '@nestjs/swagger';
-import { LoginResponseDto } from '@/auth/dto/login-response.dto';
-import { ProfileDto } from '@/auth/dto/profile.dto';
-import {
-  IdsDto,
-  ReceivedCheckedBodyDto,
-  ReceivedPlainBodyDto,
-  ReceivedRawBodyDto,
-  StrictProbeResultDto,
-} from '@/modules/validation-demo/dto/webhook-response.dto';
-import { UserDto } from '@/modules/validation-demo/user.dto';
 import { ENVELOPE_COMPONENT_SCHEMAS } from './envelope.schema';
-import { isSwaggerEnabled } from './is-swagger-enabled';
+import type { ApiDocsOptions } from './api-docs.options';
 
 /** `/docs`（UI）与 `/docs-json`（原始文档）的路径。 */
 export const SWAGGER_UI_PATH = 'docs';
 export const SWAGGER_JSON_PATH = 'docs-json';
 
 /**
- * 只作为**响应**出现、需要显式注册的模型。
+ * 本文档层**唯一**的输入 —— 就是注入进来的 {@link ApiDocsOptions}。
  *
- * 为什么需要这张表：`@nestjs/swagger` 只为**它探测到的模型类**生成 `components.schemas`。
- * 入参 DTO（`@Body()` / `@Query()` 的类型）会被自动发现，但响应模型只以 `$ref` **字符串**
- * 的形式出现在 schema 里 —— 框架不会逆向为字符串创建组件。少注册就是 Swagger UI 上的
- * 悬空引用（实测踩过：`data: { $ref: UserDto }` 而 `components.schemas.UserDto` 不存在）。
+ * 保留这个别名（而不是直接用 `ApiDocsOptions`）是为了让调用点能表达
+ * "我给的是构造文档所需的选项"，同时**不重复声明任何字段**：
  *
- * ⚠️ 新增"响应模型"（不是请求 DTO）时要往这里加一条。
- * `openapi.e2e-spec.ts` 里有一条**通用守卫**：文档里出现的每个 `$ref` 都必须在
- * `components.schemas` 里能找到，漏加会直接让测试红。
+ * ## 为什么是"选项"而不是"登记表"
+ *
+ * 这里曾经有一张 `RESPONSE_MODELS` 常量，静态 import 了 auth 与 validation-demo 的
+ * 全部响应 DTO —— 于是**文档层反向依赖业务层**，新增一个业务模块必须来改这个文件。
+ *
+ * 现在 tags 与 `extraModels` 由业务模块的 `FeatureDocs` 自描述、组合根
+ * （`app.module.ts` → `ApiDocsModule`）通过 `API_DOCS_OPTIONS` 注入。
+ * 依赖方向因此变成**单向**：`业务 → 文档描述符`、`组合根 → 文档层`，
+ * 而 `src/swagger/` 不再 import 任何业务代码（守卫见 `docs/architecture-review.md` §6②）。
  */
-export const RESPONSE_MODELS = [
-  UserDto,
-  IdsDto,
-  StrictProbeResultDto,
-  ReceivedCheckedBodyDto,
-  ReceivedRawBodyDto,
-  ReceivedPlainBodyDto,
-  LoginResponseDto,
-  ProfileDto,
-];
-
-export interface SetupSwaggerOptions {
-  /** 服务地址，只影响文档里的 `servers` 展示。 */
-  serverUrl?: string;
-  /** 强制覆盖启停判断（测试用；不传则走 `isSwaggerEnabled()`）。 */
-  enabled?: boolean;
-}
+export type SetupSwaggerOptions = ApiDocsOptions;
 
 /**
  * **构造** OpenAPI 文档 —— 唯一一处文档配置。
@@ -69,7 +47,7 @@ export function buildDocument(
         '',
         '**响应契约**：',
         '- 成功 `{ success: true, data, meta? }`',
-        '- 失败 `{ success: false, error, message, code?, traceId?, errors? }`',
+        '- 失败 `{ success: false, error, message, traceId?, errors? }`',
         '',
         '`success` 是唯一判据；`code` 是机器判据（**不要 parse `message`**）；',
         '数字状态码只在 HTTP 状态行里；`traceId` 同时回写在 `x-request-id` 响应头。',
@@ -78,24 +56,32 @@ export function buildDocument(
     )
     .setVersion('1.0.0')
     .setLicense('MIT', 'https://opensource.org/licenses/MIT')
-    .addServer(options.serverUrl ?? 'http://localhost:3000', '本地开发')
-    .addTag(
-      'validation-demo',
-      '参数校验 / 响应契约的活文档（内存版 users 资源）',
-    )
-    .addTag(
-      'auth',
-      '认证：`POST /auth/login` 用内存用户表换 JWT，`GET /auth/profile` 需要 Bearer token',
-    )
-    .build();
+    .addServer(options.serverUrl ?? 'http://localhost:3000', '本地开发');
 
-  const document = SwaggerModule.createDocument(app, config, {
+  /**
+   * 顶层 tag 由**业务模块**自描述（`FeatureDocs.tag`）。
+   *
+   * 这里只把数据交给 `DocumentBuilder`：`addTag()` 的 `description` 是可选的，
+   * 不传时产出的就是"只有 `name`"的 tag 对象 —— 与控制器上的 `@ApiTags('…')`
+   * 提供的名字相同。
+   *
+   * ⚠️ 本层不知道有哪些 tag，所以"每个 tag 都有描述"由
+   * `openapi.e2e-spec.ts` 的守卫负责（tag 名与控制器不一致时它会红）。
+   */
+  for (const tag of options.tags ?? []) {
+    config.addTag(tag.name, tag.description);
+  }
+
+  const document = SwaggerModule.createDocument(app, config.build(), {
     /**
-     * 响应模型要显式注册（见 {@link RESPONSE_MODELS} 的说明）：
+     * 响应模型要显式注册（理由见 `ApiDocsOptions.responseModels` 的说明）：
      * `@ApiOkEnvelope(UserDto, …)` 只在 schema 里写了一个 `$ref` 字符串，
      * 不注册的话 `components.schemas.UserDto` 不存在 → UI 上是悬空引用。
+     *
+     * ⚠️ `?? []` 不只是兜底：这一项曾经是模块内常量，现在来自注入的选项 ——
+     * 没有它，任何没注入 `API_DOCS_OPTIONS` 的测试模块生成的文档都会缺组件。
      */
-    extraModels: RESPONSE_MODELS,
+    extraModels: options.responseModels ?? [],
   });
 
   /**
@@ -129,17 +115,18 @@ export function buildDocument(
  *
  * ## 启停
  *
- * 走 `isSwaggerEnabled()`（默认：非 production 开启；`ENABLE_SWAGGER` 可显式覆盖）。
+ * `options.enabled` 是**必填**的：本层刻意不读 `process.env` ——
+ * 要不要暴露文档是**配置层**的决定（`src/config/swagger.config.ts` 的 `isSwaggerEnabled()`），
+ * 由入口读出来传进来。
+ *
  * 关掉时**什么都不注册**，访问 `/docs` 会落到 Nest 未匹配路由的 404，
  * 即标准失败信封 `{ success: false, error: 'Not Found', message: 'Cannot GET /docs' }`。
  */
 export function setupSwagger(
   app: INestApplication,
-  options: SetupSwaggerOptions = {},
+  options: SetupSwaggerOptions,
 ): void {
-  const enabled = options.enabled ?? isSwaggerEnabled();
-
-  if (!enabled) {
+  if (!options.enabled) {
     return;
   }
 

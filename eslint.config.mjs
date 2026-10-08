@@ -37,6 +37,11 @@ export default tseslint.config(
   {
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
+      /**
+       * 禁止 `console.*`：日志必须走 `new Logger(Ctx)` / `AppLogger` ——
+       * 否则那行日志不会带上 traceId/userId，也不会落盘（见 docs/logging.md）。
+       */
+      'no-console': 'error',
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-unsafe-argument': 'warn',
       "prettier/prettier": ["error", { endOfLine: "auto" }],

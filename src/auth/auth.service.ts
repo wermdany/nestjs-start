@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InvalidCredentialsException } from './exceptions';
 import { lifetimeSecondsOf } from './jwt-payload';
@@ -15,6 +15,8 @@ import { LoginResponseDto } from './dto/login-response.dto';
  */
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly users: UsersService,
     private readonly jwt: JwtService,
@@ -38,6 +40,10 @@ export class AuthService {
     const user = this.users.findByUsername(dto.username);
 
     if (!user || !this.users.verifyPassword(user, dto.password)) {
+      // 失败只记到 `warn`，且**只记用户名**：密码当然不记，
+      // "用户是否存在"也不能记 —— 那等于把枚举结果写进日志。
+      this.logger.warn('login rejected', { username: dto.username });
+
       throw new InvalidCredentialsException();
     }
 
@@ -47,6 +53,12 @@ export class AuthService {
     // 有效期从**刚签发的这个 token** 里读（`exp - iat`），而不是从配置再算一遍 ——
     // 读出来的值一定等于客户端手里那个 token 的真实寿命，不会和配置漂移。
     const expiresIn = lifetimeSecondsOf(this.jwt.decode(accessToken));
+
+    // 审计：登录成功（**不含 token** —— 日志比请求更不该出现凭证）
+    this.logger.log('login succeeded', {
+      sub: user.id,
+      username: user.username,
+    });
 
     return {
       accessToken,

@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { Public } from '@/auth';
-import { RawBody } from '@/contract';
+import { RawBody } from '@/system/http-validation';
 import {
   ApiCreatedEnvelope,
   ApiOkEnvelope,
@@ -157,5 +157,25 @@ export class ValidationDemoController {
   @ApiCreatedEnvelope('null', '没有返回值时 `data` 为 `null`（不是空响应体）')
   returnNothing(): void {
     return undefined;
+  }
+
+  /**
+   * 故意抛一个**普通 `Error`**（不是 `HttpException`）—— 演示"日志与响应各拿各的"：
+   *
+   * - 客户端拿到 500 与**通用文案**，没有堆栈（`AppExceptionFilter` 的安全边界）；
+   * - 服务端日志里有一条 `error` 行，带**完整 `stack`** 与同一个 `traceId`
+   *   （`logs/app.log`），排障靠它而不是靠给客户端更多细节。
+   *
+   * 见 [`docs/logging.md`](../../../docs/logging.md) 与响应契约 §9。
+   */
+  @Get('boom')
+  @ApiOperation({
+    summary: '故意触发 500（堆栈只进日志、不进响应）',
+    description:
+      '抛普通 Error ⇒ HTTP 500 + 通用文案；完整堆栈只出现在服务端日志里，' +
+      '并且与响应头 `x-request-id` 是同一个 `traceId`。',
+  })
+  boom(): void {
+    throw new Error('boom: demo of an unhandled exception');
   }
 }

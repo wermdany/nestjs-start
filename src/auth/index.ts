@@ -1,7 +1,7 @@
 /**
  * 认证模块（`src/auth/`）的**对外门面**。
  *
- * 与 `src/contract/index.ts`、`src/config/index.ts` 同一套规矩：
+ * 与 `src/system/http-validation/index.ts`、`src/config/index.ts` 同一套规矩：
  * 模块内部互相引用走**具体文件**（`auth.module.ts` 里写 `./jwt-auth.guard`），
  * 门面只做**显式具名导出**、不用 `export *`。
  *

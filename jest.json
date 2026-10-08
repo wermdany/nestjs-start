@@ -1,15 +1,21 @@
 {
-  "moduleFileExtensions": ["js", "json", "ts"],
+  "moduleFileExtensions": [
+    "js",
+    "json",
+    "ts"
+  ],
   "rootDir": "src",
   "moduleNameMapper": {
-    "^@/(.*)$": "<rootDir>/$1",
-    "^@nest-start/api-contract$": "<rootDir>/../packages/api-contract/dist/index.js"
+    "^@/(.*)$": "<rootDir>/$1"
   },
   "testEnvironment": "node",
   "testRegex": "\\.spec\\.ts$",
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
-  "collectCoverageFrom": ["**/*.(t|j)s", "!**/__tests__/**"],
+  "collectCoverageFrom": [
+    "**/*.(t|j)s",
+    "!**/__tests__/**"
+  ],
   "coverageDirectory": "../coverage"
 }

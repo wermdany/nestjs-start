@@ -1,5 +1,5 @@
 import { HttpStatus } from '@nestjs/common';
-import { ApiException, ErrorCode } from '@/contract';
+import { ApiException } from '@/system/http-validation';
 
 /** `WWW-Authenticate` 里的 realm —— 只是给客户端一个可读的"这是哪个保护空间"。 */
 export const BEARER_REALM = 'nestjs-start';
@@ -24,22 +24,17 @@ const UNAUTHENTICATED_MESSAGE: Readonly<Record<UnauthenticatedReason, string>> =
  * 守卫用：**401 + `WWW-Authenticate`**。
  *
  * 为什么不用框架的 `UnauthorizedException`：它的载荷是
- * `{ statusCode, message, error }`，没有机器可读的 `code`，前端只能 parse 文案 ——
- * 那正是本仓库契约要避免的（文案可改、可 i18n，`code` 不能）。
+ * `{ statusCode, message, error }`，也就是**没有** `WWW-Authenticate` 响应头；
+ * 而 RFC 6750 要求 401 带上它，否则客户端不知道该怎么提供凭证。
  *
- * `reason` 同时进 `WWW-Authenticate` 头的 `error` 属性（RFC 6750）：
+ * `reason` 进 `WWW-Authenticate` 头的 `error` 属性（RFC 6750）：
  * 头属于 HTTP 层，不往 body 里塞额外字段。
  */
 export class UnauthenticatedException extends ApiException {
   constructor(reason: UnauthenticatedReason = 'invalid_request') {
-    super(
-      ErrorCode.UNAUTHENTICATED,
-      UNAUTHENTICATED_MESSAGE[reason],
-      HttpStatus.UNAUTHORIZED,
-      {
-        'WWW-Authenticate': `Bearer realm="${BEARER_REALM}", error="${reason}"`,
-      },
-    );
+    super(UNAUTHENTICATED_MESSAGE[reason], HttpStatus.UNAUTHORIZED, {
+      'WWW-Authenticate': `Bearer realm="${BEARER_REALM}", error="${reason}"`,
+    });
   }
 }
 
@@ -53,10 +48,6 @@ export class UnauthenticatedException extends ApiException {
  */
 export class InvalidCredentialsException extends ApiException {
   constructor() {
-    super(
-      ErrorCode.UNAUTHENTICATED,
-      'Invalid username or password',
-      HttpStatus.UNAUTHORIZED,
-    );
+    super('Invalid username or password', HttpStatus.UNAUTHORIZED);
   }
 }

@@ -113,6 +113,52 @@ export const JWT_SECRET_MIN_WARN_LENGTH = 32;
 /** `expiresIn` 接受的格式：数字 + 单位（只放开最常见的四种，避免"看着像其实不生效"）。 */
 export const JWT_EXPIRES_IN_PATTERN = /^\d+[smhd]$/;
 
+// ── 日志（Observability） ──────────────────────────────────────────────────────
+
+/** 可用的日志级别（从低到高），与 `@nestjs/common` 的 `LOG_LEVELS` 一致。 */
+export const LOG_LEVELS = [
+  'verbose',
+  'debug',
+  'log',
+  'warn',
+  'error',
+  'fatal',
+] as const;
+
+export type LogLevelName = (typeof LOG_LEVELS)[number];
+
+export const DEFAULT_LOG_DIR = 'logs';
+export const DEFAULT_LOG_FILE = 'app.log';
+/** 单文件上限 10MB（超过即滚动）。 */
+export const DEFAULT_LOG_MAX_BYTES = 10 * 1024 * 1024;
+/** 保留 5 个历史文件（不含活动文件）。 */
+export const DEFAULT_LOG_MAX_FILES = 5;
+
+/**
+ * 不同环境的默认级别：
+ *
+ * - `test` 用 `warn`：测试输出保持干净（要看细节就显式 `LOG_LEVEL=debug`）；
+ * - `development` 用 `debug`：本地要排障细节；
+ * - `production` 用 `log`：`debug`/`verbose` 太吵，且可能带出内部结构。
+ */
+export function defaultLogLevelFor(nodeEnv: NodeEnv): LogLevelName {
+  switch (nodeEnv) {
+    case 'test':
+      return 'warn';
+    case 'production':
+      return 'log';
+    default:
+      return 'debug';
+  }
+}
+
+export function isLogLevelName(value: unknown): value is LogLevelName {
+  return (
+    typeof value === 'string' &&
+    (LOG_LEVELS as readonly string[]).includes(value)
+  );
+}
+
 // ── 类型判断与强制转换（env 里一切都是字符串） ────────────────────────────────
 
 export function isNodeEnv(value: unknown): value is NodeEnv {
@@ -323,6 +369,47 @@ class EnvironmentVariables {
   })
   JWT_EXPIRES_IN?: string;
 
+  /** 日志输出阈值（低于它的级别直接丢弃）。 */
+  @IsOptional()
+  @IsIn([...LOG_LEVELS], {
+    message: `LOG_LEVEL 只能是 ${LOG_LEVELS.join(' / ')} 之一`,
+  })
+  LOG_LEVEL?: string;
+
+  /** 是否把日志同时写进本地文件（测试环境默认关闭）。 */
+  @IsOptional()
+  @IsIn([...BOOLEAN_VALUES], {
+    message: "LOG_TO_FILE 只能是 'true' 或 'false'",
+  })
+  LOG_TO_FILE?: string;
+
+  /** 日志目录（不存在时启动会自动创建）。 */
+  @IsOptional()
+  @IsString({ message: 'LOG_DIR 必须是字符串' })
+  LOG_DIR?: string;
+
+  /** 活动日志文件名；**不含路径分隔符**（目录由 LOG_DIR 管）。 */
+  @IsOptional()
+  @IsString({ message: 'LOG_FILE 必须是字符串' })
+  LOG_FILE?: string;
+
+  /** 单文件上限（字节）；0 表示只按天滚动。 */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({
+    message: 'LOG_MAX_BYTES 必须是大于等于 1024 的整数（0 表示只按天滚动）',
+  })
+  @Min(0, { message: 'LOG_MAX_BYTES 必须是大于等于 0 的整数' })
+  LOG_MAX_BYTES?: number;
+
+  /** 保留的历史文件数（不含活动文件）。 */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'LOG_MAX_FILES 必须是 0..100 之间的整数' })
+  @Min(0, { message: 'LOG_MAX_FILES 必须是 0..100 之间的整数' })
+  @Max(100, { message: 'LOG_MAX_FILES 必须是 0..100 之间的整数' })
+  LOG_MAX_FILES?: number;
+
   @IsOptional()
   @IsIn([...DATABASE_DRIVERS], {
     message: `DATABASE_DRIVER 只能是 ${DATABASE_DRIVERS.join(' / ')} 之一`,
@@ -430,7 +517,8 @@ function formatReceived(value: unknown): string {
  *
  * - `DATABASE_URL` 存在时优先，离散字段可以缺席；
  * - 否则 `driver !== memory` 时必须凑齐 host / user / name（sqlite 只需要 name）；
- * - 生产环境禁止 `DATABASE_SYNCHRONIZE=true`（ORM 自动改表 = 数据事故）。
+ * - 生产环境禁止 `DATABASE_SYNCHRONIZE=true`（ORM 自动改表 = 数据事故）；
+ * - 生产环境必须给出 **CORS 来源白名单**（`*` 与凭证不能共存，也等于没有边界）。
  */
 function findCrossFieldProblems(raw: EnvSource): string[] {
   const nodeEnv = isNodeEnv(raw.NODE_ENV) ? raw.NODE_ENV : DEFAULT_NODE_ENV;
@@ -472,6 +560,21 @@ function findCrossFieldProblems(raw: EnvSource): string[] {
     }
   }
 
+  // CORS：生产环境**必须**显式给出白名单。`*` 有两个独立的理由不能上生产：
+  // 1. 浏览器规范禁止 `Access-Control-Allow-Origin: *` 与凭证同时出现，
+  //    所以通配来源等于"永远不能带 Cookie"（见 `src/platform/platform.options.ts`）；
+  // 2. 它本身就是"没有来源边界"，而 CORS 是唯一挡在浏览器前的闸门。
+  // 这条规则原先只是一句告警（那时 CORS 还没接线），A2 接上之后升级为启动失败。
+  if (
+    nodeEnv === 'production' &&
+    parseCorsOrigins(raw.CORS_ORIGINS).includes('*')
+  ) {
+    problems.push(
+      `生产环境必须显式配置 CORS_ORIGINS（当前为 "${formatReceived(raw.CORS_ORIGINS)}" ⇒ ${parseCorsOrigins(raw.CORS_ORIGINS).join(',')}）：` +
+        '通配来源既不能与凭证共存，也等于没有来源白名单',
+    );
+  }
+
   if (
     nodeEnv === 'production' &&
     toBoolean(raw.DATABASE_SYNCHRONIZE, DEFAULT_DATABASE_SYNCHRONIZE)
@@ -496,6 +599,16 @@ function findCrossFieldProblems(raw: EnvSource): string[] {
     }
   }
 
+  // 日志：文件名里不允许出现路径分隔符 —— 目录由 LOG_DIR 单独管，
+  // 否则 `LOG_FILE=../../etc/hosts` 这种写法会静默写到意料之外的地方。
+  const logFile = toOptionalString(raw.LOG_FILE);
+
+  if (logFile && /[/\\]/.test(logFile)) {
+    problems.push(
+      `LOG_FILE 只能是文件名，不能包含路径分隔符（收到 "${logFile}"）：目录请用 LOG_DIR 配置`,
+    );
+  }
+
   return problems;
 }
 
@@ -512,12 +625,6 @@ export function configWarnings(raw: EnvSource): string[] {
   const warnings: string[] = [];
 
   if (nodeEnv === 'production') {
-    if (parseCorsOrigins(raw.CORS_ORIGINS).includes('*')) {
-      warnings.push(
-        'CORS_ORIGINS 未配置或为 * —— A2 接上 CORS 之后，生产环境这样配会拒绝启动',
-      );
-    }
-
     if (toBoolean(raw.DATABASE_LOGGING, DEFAULT_DATABASE_LOGGING)) {
       warnings.push(
         '生产环境打开了 DATABASE_LOGGING：SQL 可能带出敏感数据，且影响性能',

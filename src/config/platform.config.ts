@@ -10,12 +10,18 @@ import type { EnvSource } from './env';
 /**
  * 「平台层」的配置：CORS 与限流。
  *
- * ⚠️ **两个 namespace 目前都没有消费者**（🅿️ 预留）。它们属于 A2 的 `PlatformModule`：
- * CORS 与 `ThrottlerModule` 的**接线**还没做，但配置契约、默认值与启动期校验先立在这里，
- * 这样 A2 落地时只需要在模块里读配置，不用再动 `main.ts` / env 契约。
+ * ✅ **两个 namespace 都有消费者了**（曾经是 🅿️ 预留）：`src/platform/` 的
+ * `platformOptionsFactory()` 把它们投影成 `CorsOptions` / `ThrottlerModuleOptions`，
+ * 于是：
  *
- * 一旦接上，请把 `src/config/describe-config.ts` 里 `RESERVED_NAMESPACES` 对应的项删掉
- * —— 那行日志会自己告诉你哪些配置还是"空转"的。
+ * - `CORS_ORIGINS` → 入口的 `app.enableCors()`（`main.ts`）；
+ * - `THROTTLE_TTL_SECONDS` / `THROTTLE_LIMIT` → `PlatformModule` 里的 `ThrottlerGuard`。
+ *
+ * 所以它们已经从 `src/config/describe-config.ts` 的 `RESERVED_NAMESPACES` 里删掉了
+ * —— 启动摘要里不会再显示 `(预留)`。
+ *
+ * ⚠️ 生产环境不允许通配来源：`findCrossFieldProblems()` 会在 `CORS_ORIGINS` 未设或含
+ * `*` 时**拒绝启动**（理由见 `src/platform/platform.options.ts` 的 `toCorsOptions`）。
  */
 
 /** CORS 允许的来源列表（`config.getOrThrow<CorsConfig>('cors')`）。 */

@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import { IsIn, IsInt, Min } from 'class-validator';
-import { IsOptionalNotNull } from '../validation/is-optional-not-null.decorator';
+import { IsOptionalNotNull } from '../http-validation/is-optional-not-null.decorator';
 
 /** 不传 `limit` 时的默认页大小。 */
 export const PAGE_SIZE_DEFAULT = 10;

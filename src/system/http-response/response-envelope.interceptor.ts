@@ -26,7 +26,7 @@ export interface ResponseEnvelopeOptions {
  * 统一**成功**响应的形状：`{ success: true, data, meta? }`。
  *
  * 失败侧由 `AppExceptionFilter` 负责（见 `response-contract.ts` 的契约说明）：
- * 它产出 `{ success: false, error, message, code?, traceId?, errors? }`，
+ * 它产出 `{ success: false, error, message, traceId?, errors? }`，
  * 并把**数字状态码写进 HTTP 状态行**。这个拦截器不碰状态码 ——
  * body 里没有 `statusCode`，前端要数字码就读 `res.status`。
  *

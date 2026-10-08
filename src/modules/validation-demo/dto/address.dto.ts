@@ -1,5 +1,5 @@
 import { IsString, Length, Matches } from 'class-validator';
-import { IsOptionalNotNull } from '@/contract';
+import { IsOptionalNotNull } from '@/system/http-validation';
 
 export class AddressDto {
   @IsString()

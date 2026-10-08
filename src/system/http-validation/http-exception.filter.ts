@@ -8,16 +8,23 @@ import {
 } from '@nestjs/common';
 import { STATUS_CODES } from 'node:http';
 import { ApiException } from './api-exception';
-import type { ApiErrorBody, ErrorDetail } from './error-contract';
-import { ErrorCode, isErrorCode } from './error-code';
-import { isErrorLocation } from './error-location';
-import { getRequestId } from '../observability/request-context';
-import { REQUEST_ID_PROP } from '../observability/request-id.middleware';
+import type { ErrorBody, ErrorDetail } from '../http-contract';
+import { isErrorLocation } from '../http-contract';
+import { getRequestId } from '../request-context/request-context';
+import { REQUEST_ID_PROP } from '../request-context/request-id.middleware';
 
 /**
- * 全局异常过滤器：把**所有**异常收敛成同一个 {@link ApiErrorBody} 形状
- * `{ success: false, error, message, code?, traceId?, errors? }`，
+ * 全局异常过滤器：把**所有**异常收敛成同一个 {@link ErrorBody} 形状
+ * `{ success: false, error, message, traceId?, errors? }`，
  * 并把**数字状态码写进 HTTP 状态行**。
+ *
+ * ## 为什么**没有** `code`
+ *
+ * 本过滤器曾经会把异常载荷里的 `code` 透出（`USER_NOT_FOUND` 之类）。
+ * 该字段已刻意删除，于是失败响应的**大类判据只剩 `error`**（HTTP 状态短语）。
+ * ⚠️ 代价：同状态码下的不同业务原因不再可机器区分 —— 详见 `ErrorBody` 的注释。
+ * 客户端若要区分，现在只能读 `message` 文案（那是本仓库警告过的反模式），
+ * 所以业务侧应尽量让 `message` **说清楚是哪一种失败**。
  *
  * 为什么需要它（而不是只改管道的 `exceptionFactory`）：
  * `exceptionFactory` 只能管校验错误；404 / 409 / 500 是 service 或框架抛的，
@@ -50,7 +57,7 @@ export class AppExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<{
       status: (code: number) => {
-        json: (body: ApiErrorBody) => void;
+        json: (body: ErrorBody) => void;
       };
       setHeader: (name: string, value: string) => void;
       headersSent?: boolean;
@@ -104,7 +111,7 @@ export class AppExceptionFilter implements ExceptionFilter {
   private toApiErrorBody(
     exception: unknown,
     host: ArgumentsHost,
-  ): { statusCode: number; body: ApiErrorBody } {
+  ): { statusCode: number; body: ErrorBody } {
     const traceId = this.traceIdOf(host);
 
     if (!(exception instanceof HttpException)) {
@@ -118,7 +125,6 @@ export class AppExceptionFilter implements ExceptionFilter {
           success: false,
           error: this.phraseOf(statusCode),
           message: 'Internal server error',
-          code: ErrorCode.INTERNAL_ERROR,
           ...(traceId ? { traceId } : {}),
         },
       };
@@ -140,10 +146,9 @@ export class AppExceptionFilter implements ExceptionFilter {
       };
     }
 
-    const { message, errors, code } = payload as {
+    const { message, errors } = payload as {
       message?: unknown;
       errors?: unknown;
-      code?: unknown;
     };
     const details = this.normalizeDetails(errors, message);
 
@@ -153,7 +158,6 @@ export class AppExceptionFilter implements ExceptionFilter {
         success: false,
         error: phrase,
         message: this.messageOf(message, details, phrase),
-        ...(isErrorCode(code) ? { code } : {}),
         ...(traceId ? { traceId } : {}),
         ...(details.length ? { errors: details } : {}),
       },
@@ -163,10 +167,12 @@ export class AppExceptionFilter implements ExceptionFilter {
   /**
    * 把异常的 `errors` / `message` 规范化成 `ErrorDetail[]`。
    *
-   * - 本仓库的校验管道：`errors` 已经是 `{ field, message, code?, location? }`；
+   * - 本仓库的校验管道：`errors` 已经是 `{ field, message, location? }`；
    * - Nest 内建管道的传统载荷：没有 `errors`，只有 `message: string[]` ⇒
    *   逐条转成 `field: '(request)'`（它们不带字段名，硬编一个字段名会比空更误导）；
    * - 任何一条形状不对的明细直接丢弃，而不是把垃圾透给客户端（跨信任边界）。
+   *
+   * ⚠️ 载荷里多余的 `code` 会被**静默忽略**（不再是契约的一部分）。
    */
   private normalizeDetails(errors: unknown, message: unknown): ErrorDetail[] {
     const raw: unknown[] = Array.isArray(errors)
@@ -186,7 +192,6 @@ export class AppExceptionFilter implements ExceptionFilter {
       const {
         field,
         message: detail,
-        code,
         location,
       } = item as Record<string, unknown>;
 
@@ -198,7 +203,6 @@ export class AppExceptionFilter implements ExceptionFilter {
         {
           field: typeof field === 'string' && field ? field : '(request)',
           message: detail,
-          ...(isErrorCode(code) ? { code } : {}),
           ...(isErrorLocation(location) ? { location } : {}),
         },
       ];
@@ -246,13 +250,15 @@ export class AppExceptionFilter implements ExceptionFilter {
       method?: string;
       url?: string;
     }>();
-    const where = `${request.method ?? '?'} ${request.url ?? '?'}`;
-    const suffix = traceId ? ` [${traceId}]` : '';
 
-    this.logger.error(
-      `Unhandled exception on ${where}${suffix}`,
-      this.describe(exception),
-    );
+    // msg 是**稳定短句**（`grep 'unhandled exception'` 能统计），变量全进结构化字段；
+    // `traceId` 显式传：过滤器不一定在 `AsyncLocalStorage` 的作用域里，
+    // 而它是"响应里的 traceId → 日志"这条链的关键字段（logger 会用字段兜底）。
+    this.logger.error('unhandled exception', this.describe(exception), {
+      method: request.method ?? '?',
+      url: request.url ?? '?',
+      traceId,
+    });
   }
 
   /** 堆栈只进日志，绝不进响应体。 */

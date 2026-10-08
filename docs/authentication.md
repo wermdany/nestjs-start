@@ -27,7 +27,7 @@ curl -i $B/profile | sed -n '1p;/www-authenticate/Ip'    # 401 + WWW-Authenticat
 
 | 关注点 | 本仓库 | 说明 |
 | --- | --- | --- |
-| **认证** Authentication：你是谁 | ✅ 做 | 登录 + JWT 验签；失败 **401** `UNAUTHENTICATED` |
+| **认证** Authentication：你是谁 | ✅ 做 | 登录 + JWT 验签；失败 **401** |
 | 授权 Authorization：你能不能调这个接口 | ❌ 不做 | 没有角色 / 权限 / `@Roles()` —— token 里也没有这些声明 |
 | 策略 Policy：你能不能动这一条数据 | ❌ 不做 | 需要授权层时才谈（§10 的升级路径） |
 
@@ -90,11 +90,11 @@ GET /auth/profile（受保护）
 
 // 401：凭证不对（**不区分**用户名不存在与密码错误，两者响应除 traceId 外逐字相同）
 { "success": false, "error": "Unauthorized", "message": "Invalid username or password",
-  "code": "UNAUTHENTICATED", "traceId": "…" }
+  "traceId": "…" }
 
 // 400：参数不合法（走既有全局管道，字段级明细带 location: "body"）
-{ "success": false, "error": "Bad Request", "code": "VALIDATION_FAILED",
-  "errors": [{ "field": "password", "location": "body", "code": "REQUIRED", "message": "…" }] }
+{ "success": false, "error": "Bad Request", "message": "Request validation failed",
+  "errors": [{ "field": "password", "location": "body", "message": "…" }] }
 ```
 
 - `username` 去首尾空格 + 转小写；**`password` 什么都不做**（首尾空格是密码的一部分）。
@@ -110,7 +110,7 @@ GET /auth/profile（受保护）
 // 无 / 坏 / 过期 / 载荷形状不对 → 401（键集里**没有** errors）
 // 响应头：WWW-Authenticate: Bearer realm="nestjs-start", error="invalid_request|invalid_token"
 { "success": false, "error": "Unauthorized", "message": "Missing or malformed credentials",
-  "code": "UNAUTHENTICATED", "traceId": "…" }
+  "traceId": "…" }
 ```
 
 `sub` / `username` 是**载荷里唯一的两样东西**（加上库自动写的 `iat` / `exp`）。
@@ -126,7 +126,7 @@ GET /auth/profile（受保护）
 启动摘要里只出现"默认 / 已配置"和有效期，**绝不输出密钥**：
 
 ```
-[bootstrap] … swagger=on(http://localhost:3000) jwt=expires:1h,secret:(默认) cors=*(预留) …
+[bootstrap] … swagger=on(http://localhost:3000) jwt=expires:1h,secret:(默认) cors=* throttle=60s/100 …
 ```
 
 完整规则见 [`docs/configuration.md`](configuration.md) §2「认证」。
@@ -163,15 +163,15 @@ GET /auth/profile（受保护）
 
 | 方案 | 结论与理由 |
 | --- | --- |
-| `@nestjs/passport` | ⏸ 它的价值在**策略生态**（OAuth 几十种 provider、session、local 登录）。本期只有一种凭证（用户名 + 密码）与一种令牌（JWT），而它的默认 401 载荷不含 `code`，仍要覆写 `handleRequest` —— 换不到收益。**触发条件**：要接 Google / GitHub 登录或 session 时 |
+| `@nestjs/passport` | ⏸ 它的价值在**策略生态**（OAuth 几十种 provider、session、local 登录）。本期只有一种凭证（用户名 + 密码）与一种令牌（JWT），而框架的默认 401 载荷**不带 `WWW-Authenticate`**（RFC 6750 要求它，否则客户端不知道该怎么带凭证），仍要覆写 `handleRequest` —— 换不到收益。**触发条件**：要接 Google / GitHub 登录或 session 时 |
 | `@nestjs/jwt` | ✅ 采用。官方认证章现在的写法就是它（v11 文档已把认证章从 Passport 改成自建 `AuthModule` + JWT） |
 | CASL（`@casl/ability`） | ⏸ 它装的是"策略层"（属性 / 多 action）。本期没有授权层，`roles` 也刻意没进 token。**触发条件**：出现"只能改自己的 / 已发布的不能删"这类规则时 |
 | 自己手写 HMAC 签名 | ❌ 绝不：JWT 的坑（alg 混淆、`none`、时钟偏差、base64url 细节）不值得自己踩一遍，用官方库 |
 | 守卫里 `return false` | ❌ 只会得到 `{ statusCode, message, error }`，会破坏本仓库的失败信封；官方也建议"想要不同响应就抛异常" |
 
-## 9. 测试布局
+## 9. 测试布局（**文件已全部删除**）
 
-| 文件 | 钉住什么 |
+| 文件 | 原先钉住什么 |
 | --- | --- |
 | `src/auth/__tests__/users.service.spec.ts` | 用户表查找、密码比较（含"不做 trim"）、表里没有角色字段 |
 | `src/auth/__tests__/auth.service.spec.ts` | 签发成功（载荷只有身份、`expiresIn = exp - iat`）、密码错与用户不存在**同形**、密码不被 trim |
@@ -181,7 +181,11 @@ GET /auth/profile（受保护）
 | `src/config/__tests__/jwt.config.spec.ts` | 默认值、非法 `expiresIn` 被拒、生产缺密钥被拒、告警 |
 | `src/swagger/__tests__/openapi.e2e-spec.ts` | 文档侧：路径清单、`auth` 标签、401 声明与示例键集一致 |
 
-守卫的单测用**假 `ExecutionContext`**（`__tests__/fixtures/`）+ **真的 `JwtService`**（换个测试密钥）：
+**这些测试文件已全部删除**（连同 `src/auth/__tests__/fixtures/test-doubles.ts`）；
+`jest.json` / `jest-e2e.json` 保留，但 `pnpm test` / `pnpm test:e2e` 现在以 "no tests found" 失败 ——
+上面那些认证行为的自动守卫都不在了，改守卫 / 载荷 / 响应头时没有测试会变红。
+
+原先的写法是：守卫的单测用**假 `ExecutionContext`**（`__tests__/fixtures/`）+ **真的 `JwtService`**（换个测试密钥）：
 判定逻辑不该只能靠起 HTTP 才能验证，而"无效 token"也不该靠 stub 假装 —— 那条路径正是守卫存在的理由。
 
 ## 10. 升级路径
@@ -192,9 +196,9 @@ GET /auth/profile（受保护）
 | 明文密码 | bcrypt / argon2 加盐哈希（`verifyPassword` 内部改法） | 同上，一处 |
 | 短有效期 + 续期 | refresh token（`POST /auth/refresh`）+ 刷新令牌表 | 新增一个端点与一处校验；守卫不变 |
 | 主动吊销 / 登出 | 黑名单或"令牌版本号"（`ver` 声明 + 用户表里的当前版本） | 守卫要多查一次（从纯计算变成 I/O）—— 这是明确的取舍 |
-| 角色 / 权限 | 回到 RBAC：`roles` 进 token 或查库 + `@Roles()` + `RolesGuard`（`APP_GUARD`，注册在认证之后） | 新增授权守卫与 `PERMISSION_DENIED`（403）这个 `code`；认证部分不动 |
+| 角色 / 权限 | 回到 RBAC：`roles` 进 token 或查库 + `@Roles()` + `RolesGuard`（`APP_GUARD`，注册在认证之后） | 新增授权守卫与 403（`PermissionDeniedException`）这个新状态码 / 新异常类型；认证部分不动 |
 | 细粒度策略 | CASL（属性 / 多 action），判定放业务层 | 与上面并存；守卫只看接口级准入 |
-| 暴力破解 / 撞库 | `@nestjs/throttler` + 登录路由单独收紧 + 失败计数告警 | 平台模块的一次迭代；429 要加一个 `ErrorCode` |
+| 暴力破解 / 撞库 | `@nestjs/throttler` + 登录路由单独收紧 + 失败计数告警 | 平台模块的一次迭代；429 要加对应的新异常类型（失败响应已经只剩 `error` / `message` 可判，见 [`docs/validation.md`](validation.md) §9.8） |
 | 多服务共享密钥 | RS256（私钥签名 / 公钥验签）+ `iss` / `aud` 校验 | 换 `JwtModule` 选项 + 守卫加 `verifyOptions` |
 
 ## 11. 有意没做 / 已知代价
@@ -212,12 +216,12 @@ GET /auth/profile（受保护）
 
 - 守卫不查库 ⇒ "用户被删 / 被禁用"要到 token 过期才生效；
 - 内存用户表 ⇒ 重启即回到两个演示账号；
-- `expiresIn` 从 token 里读（`exp - iat`）⇒ 类型上是可选字段；正常路径一定存在（有单测与 e2e 钉住）；
+- `expiresIn` 从 token 里读（`exp - iat`）⇒ 类型上是可选字段；正常路径一定存在（原先有单测与 e2e 钉住，测试已删除）；
 - 演示账号写在 `UsersService` 里，`README` 与 `.env.example` 都注明了它们是**演示凭证**。
 
 ## 12. 相关文档
 
 - [`docs/configuration.md`](configuration.md)：`JWT_SECRET` / `JWT_EXPIRES_IN` 的完整契约与启动即校验规则。
-- [`docs/validation.md`](validation.md) §9：响应契约，以及 `code` / `location` / `traceId` 的分工。
+- [`docs/validation.md`](validation.md) §9：响应契约，以及 `location` / `traceId` 的分工（`code` 已从契约里移除，见 §9.8）。
 - [`docs/learning-next.md`](learning-next.md)：本项在整体路线中的位置与后续迭代。
 - [`docs/nestjs-learning-plan.md`](nestjs-learning-plan.md) §2.7 / §5.8：守卫与安全基础的概念基础。

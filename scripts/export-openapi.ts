@@ -1,12 +1,16 @@
 import { Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { AppModule } from '@/app.module';
 import { validateEnv } from '@/config';
-import type { SwaggerConfig } from '@/config';
-import { SWAGGER_JSON_PATH, buildDocument } from './setup-swagger';
+import { installLogger } from '@/observability';
+import { resolveApiDocsOptions } from '@/swagger/api-docs.options';
+import { SWAGGER_JSON_PATH, buildDocument } from '@/swagger/setup-swagger';
+
+// 与 `main.ts` 一样：这个入口不经过 `main.ts`，但也要让日志走同一套实现
+// （`installLogger()` 幂等，重复调用无害）。
+installLogger();
 
 /**
  * 把 OpenAPI 文档落盘成 `openapi/openapi.json`（`pnpm openapi:export`）。
@@ -30,13 +34,10 @@ async function main(): Promise<void> {
   try {
     await app.init();
 
-    // `serverUrl` 从配置读 —— 否则设了 `SWAGGER_SERVER_URL` 时，
-    // 落盘文档里的 `servers` 会和 `/docs-json` 不一致。
-    const { serverUrl } = app
-      .get(ConfigService)
-      .getOrThrow<SwaggerConfig>('swagger');
-
-    const document = buildDocument(app, { serverUrl });
+    // 文档选项（`serverUrl` + 业务自描述的 tags / responseModels）由 `ApiDocsModule`
+    // 从配置与业务描述符合成 —— 于是落盘产物与 `/docs-json` 必然一致，
+    // 而不是"两个入口各自拼一遍，慢慢漂移"。
+    const document = buildDocument(app, resolveApiDocsOptions(app));
     const outputDir = join(process.cwd(), 'openapi');
     const outputPath = join(outputDir, 'openapi.json');
 

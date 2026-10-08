@@ -2,12 +2,13 @@ import type { ConfigService } from '@nestjs/config';
 import type { AppConfig } from './app.config';
 import { DEFAULT_JWT_SECRET } from './env';
 import type { JwtConfig } from './jwt.config';
+import type { LogConfig } from './log.config';
 import type { DatabaseConfig } from './database.config';
 import type { CorsConfig, ThrottleConfig } from './platform.config';
 import type { SwaggerConfig } from './swagger.config';
 
 /**
- * 一次把六个 namespace 读出来（`main.ts` 用它做启动日志与接线）。
+ * 一次把七个 namespace 读出来（`main.ts` 用它做启动日志与接线）。
  *
  * 每个 namespace 的接口都是**手写**的，而不是靠 `ConfigService` 的 `infer: true` 推导 ——
  * 这样类型与测试断言的是同一份定义，也不依赖 `ConfigService` 的泛型魔法。
@@ -18,6 +19,7 @@ export interface ResolvedConfig {
   cors: CorsConfig;
   throttle: ThrottleConfig;
   jwt: JwtConfig;
+  log: LogConfig;
   database: DatabaseConfig;
 }
 
@@ -25,11 +27,13 @@ export interface ResolvedConfig {
  * 🅿️ **还没有消费者**的 namespace。
  *
  * 只影响启动摘要的显示（会加上 `(预留)` 后缀），提醒"这些配置现在还是空转的"。
- * A2（CORS / 限流）与 B1（数据库）接上线时，把对应项从这里删掉即可。
+ * B1（数据库）接上线时，把对应项从这里删掉即可。
+ *
+ * 历史：`cors` 与 `throttle` **曾经在**这个列表里（配置契约先立好、接线在后）。
+ * A2 的 `src/platform/` 落地后它们都有消费者了，所以已删掉 ——
+ * 留着会让启动日志把生效中的配置标成"空转"，那就变成了假信息。
  */
 export const RESERVED_NAMESPACES: readonly (keyof ResolvedConfig)[] = [
-  'cors',
-  'throttle',
   'database',
 ];
 
@@ -40,6 +44,7 @@ export function readResolvedConfig(config: ConfigService): ResolvedConfig {
     cors: config.getOrThrow<CorsConfig>('cors'),
     throttle: config.getOrThrow<ThrottleConfig>('throttle'),
     jwt: config.getOrThrow<JwtConfig>('jwt'),
+    log: config.getOrThrow<LogConfig>('log'),
     database: config.getOrThrow<DatabaseConfig>('database'),
   };
 }
@@ -68,6 +73,14 @@ export function redactUrl(raw: string): string {
   } catch {
     return raw;
   }
+}
+
+/**
+ * 日志自身的摘要：级别 + 是否落盘（落盘时给出 `目录/文件`）。
+ * 这是运维第一眼要看的东西 —— 日志没在写，别的排障手段都会打折扣。
+ */
+function describeLog(log: LogConfig): string {
+  return `log=${log.level},file=${log.toFile ? `${log.dir}/${log.file}` : 'off'}`;
 }
 
 /**
@@ -103,8 +116,11 @@ function describeDatabase(database: DatabaseConfig): string {
  *
  * ```
  * env=development port=3000 host=(默认: 全部网卡) swagger=on(http://localhost:3000)
- *   jwt=expires:1h,secret:(默认) cors=*(预留) throttle=60s/100(预留) db=memory(预留)
+ *   jwt=expires:1h,secret:(默认) log=debug,file=logs/app.log cors=* throttle=60s/100 db=memory(预留)
  * ```
+ *
+ * `cors` / `throttle` 现在**没有** `(预留)` 后缀：`src/platform/` 已经在消费它们
+ * （见 `RESERVED_NAMESPACES`）。
  */
 export function formatConfigSummary(resolved: ResolvedConfig): string {
   const withReservationMark = (
@@ -121,6 +137,7 @@ export function formatConfigSummary(resolved: ResolvedConfig): string {
       resolved.swagger.enabled ? `on(${resolved.swagger.serverUrl})` : 'off'
     }`,
     `jwt=${describeJwt(resolved.jwt)}`,
+    describeLog(resolved.log),
     withReservationMark('cors', `cors=${resolved.cors.origins.join(',')}`),
     withReservationMark(
       'throttle',

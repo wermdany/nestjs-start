@@ -1,5 +1,6 @@
 import { IsEnum, IsString } from 'class-validator';
-import { createPaginationQueryDto, IsOptionalNotNull } from '@/contract';
+import { createPaginationQueryDto } from '@/system/pagination';
+import { IsOptionalNotNull } from '@/system/http-validation';
 import { UserRole } from './user-role.enum';
 
 /**

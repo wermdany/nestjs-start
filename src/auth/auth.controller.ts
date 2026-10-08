@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Logger,
   Post,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -46,6 +47,8 @@ import type { JwtPayload } from './jwt-payload';
 @ApiEnvelopeUnauthorized()
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(private readonly auth: AuthService) {}
 
   @Post('login')
@@ -73,6 +76,10 @@ export class AuthController {
   })
   @ApiOkEnvelope(ProfileDto, 'token 有效')
   profile(@CurrentUser() payload: JwtPayload): ProfileDto {
+    // 这条日志刻意**不带** userId 字段：守卫已经把它写进了请求上下文，
+    // logger 会自动注入 —— 这就是"调用点不用自己拼上下文"的现成例子。
+    this.logger.debug('profile read', { sub: payload.sub });
+
     return { sub: payload.sub, username: payload.username };
   }
 }
